@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+<!-- bloco que permite alterar o título desta pagina -->
+{% block title %} Helius - Home {% endblock title%}
+{% block content %} 
+<div class="main-menu-bar">
+    <nav class="main-menu">
+        <div class="main-menu-item has-submenu">
+            <span>Segurança</span>
+            <div class="submenu">
+                <a href={% url 'perfis' %}>Perfis</a>
+                <a href={% url 'permissoes' %}>Permissões</a>
+                <a href="#">Grupos</a>
+                <a href="#">Usuários</a>
+                <a href="#">Grupos Usuários</a>
+                <a href="#">Permissões Usuários</a>
+            </div>
+        </div>
+            <a href="#" class="main-menu-item">Cadastrados</a>
+            <a href="#" class="main-menu-item">Operações</a>
+            <a href="#" class="main-menu-item">Configurações</a>
+            <a href="#" class="main-menu-item">Sobre</a>
+            <a href="{% url 'logout' %}" class="main-menu-item">Sair</a>
+    </nav>
+</div>
+<!--
+<div class="principal-content">
+    Principal
+</div
+-->
+{% endblock content %}  

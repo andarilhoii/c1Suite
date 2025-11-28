@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+<!-- bloco que permite alterar o título desta pagina -->
+{% block title %} Helius - Perfis {% endblock title%}
+
+<!-- inicio do bloco que permite alterar o conteúdo dessa página-->
+{% block content %}
+<div class="cad-container">
+    <h1>Lista de Perfis</h1>
+
+    <!-- Formulário para criar/editar perfil -->
+    <form method="POST" class="cad-form">
+        {% csrf_token %}
+
+        <!-- id oculto para edição -->
+        <input type="hidden" name="id" value="{{ perfil_editar.id|default_if_none:'' }}">
+        <!-- informa à view que esta requisição é de salvar (create/update) -->
+        <input type="hidden" name="acao" value="salvar">
+
+        <label for="nome">Nome:</label>
+        <!-- preenchido quando estiver editando um perfil -->
+        <input type="text"
+               name="nome"
+               id="nome"
+               value="{{ perfil_editar.nome|default_if_none:'' }}"
+               required>
+        <br>
+
+        <label for="descricao">Descrição:</label>
+        <textarea name="descricao"
+                  id="descricao">{{ perfil_editar.descricao|default_if_none:'' }}</textarea>
+        <br>
+
+        <!-- botões principais do formulário -->
+        <div class="cad-form-buttons">
+            <button type="submit" class="btn-small btn-wide">Salvar</button>
+
+            <!-- limpar: reseta os campos nome e descricao para vazio
+                 (como a página é carregada com eles em branco, o reset limpa) -->
+            <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
+
+            <!-- voltar para a página principal -->
+            <button type="button"
+                    class="btn-small btn-wide btn-secondary"
+                    onclick="window.location.href='{% url 'home' %}'">
+                Voltar
+            </button>
+        </div>
+    </form>
+    <hr>
+
+    <!-- Listagem dos perfis -->
+    <ul class="cad-list">
+        <!-- cabeçalho das colunas -->
+        <li class="cad-header">
+            <div>Nome</div>
+            <div>Descrição</div>
+            <div class="col-acoes">Ações</div>
+        </li>
+
+        {% for perfil in perfis %}
+            <li class="cad-row">
+                <!-- coluna nome -->
+                <div class="col-nome">
+                    <strong>{{ perfil.nome }}</strong>
+                </div>
+
+                <!-- coluna descrição -->
+                <div class="col-descricao">
+                    {{ perfil.descricao|linebreaksbr }}
+                </div>
+
+                <!-- coluna ações -->
+                <div class="col-acoes">
+                    <form method="post" style="display:inline-flex; gap: 0.6rem; align-items: center;">
+                        {% csrf_token %}
+                        <input type="hidden" name="id" value="{{ perfil.id }}">
+                        <input type="hidden" name="acao" value="excluir">
+
+                        <!-- link para carregar dados no form -->
+                        <a href="?editar={{ perfil.id }}" class="btn-small btn-wide">Editar</a>
+
+                        <button type="submit"
+                                class="btn-small btn-wide btn-danger"
+                                onclick="return confirm('Confirma a exclusão deste perfil?');">
+                            Excluir
+                        </button>
+                    </form>
+                </div>
+            </li>
+        {% empty %}
+            <li>Nenhum perfil cadastrado.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock content %}
