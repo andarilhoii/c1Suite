@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Helius - Usuários{% endblock title %}
+
+{% block content %}
+<div class="cad-container">
+    <h1>Cadastro de Usuários</h1>
+
+    <!-- FORM ÚNICO: dados + perfil -->
+    <form method="POST" class="cad-form" action="{% url 'usuarios' %}">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="salvar">
+
+        <!-- Linha com Usuário | Senha | E-mail | Ativo -->
+        <div class="cad-form-row-usuarios">
+            <div class="cad-form-group">
+                <label for="id_username">Usuário</label>
+                <input type="text" name="username" id="id_username"
+                       value="{{ username_inicial|default_if_none:'' }}"
+                       autocomplete="off" required>
+            </div>
+
+            <div class="cad-form-group">
+                <label for="id_senha">Senha</label>
+                <input type="password" name="senha" id="id_senha"
+                       value="" autocomplete="new-password" required>
+            </div>
+
+            <div class="cad-form-group cad-form-email">
+                <label for="id_email">E-mail</label>
+                <input type="email" name="email" id="id_email"
+                       value="{{ email_inicial|default_if_none:'' }}"
+                       autocomplete="off" required>
+            </div>
+
+            <!-- label em cima, checkbox alinhado com os inputs -->
+            <div class="cad-form-group cad-form-group-ativo">
+                <label for="id_ativo">Ativo</label>
+                <input type="checkbox" name="ativo" id="id_ativo"
+                       {% if usuario_editar and usuario_editar.ativo %}checked{% endif %}>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2>Lista de Perfis</h2>
+        <ul class="cad-list cad-list-perfis-usuarios" style="margin-top: 1rem;">
+            <li class="cad-header">
+                <div class="col-selecionar">Selecionar</div>
+                <div class="col-nome">Nome</div>
+                <div class="col-descricao">Descrição</div>
+            </li>
+            {% for perfil in perfis %}
+                <li class="cad-row">
+                    <div class="col-selecionar">
+                        <input type="radio"
+                               name="perfil_associado"
+                               value="{{ perfil.id }}"
+                               {% if perfil_associado and perfil_associado.id == perfil.id %}checked{% endif %}>
+                    </div>
+                    <div class="col-nome">
+                        {{ perfil.nome }}
+                    </div>
+                    <div class="col-descricao">
+                        {{ perfil.descricao|linebreaksbr }}
+                    </div>
+                </li>
+            {% empty %}
+                <li>Nenhum perfil cadastrado.</li>
+            {% endfor %}
+        </ul>
+
+        <div class="cad-form-buttons" style="margin-top: 1.5rem;">
+            <button type="submit" class="btn-small btn-wide">Salvar</button>
+            <button type="button" class="btn-small btn-wide btn-secondary"
+                    onclick="window.location.href='{% url "usuarios" %}'">
+                Limpar
+            </button>
+            <button type="button"
+                    class="btn-small btn-wide btn-secondary"
+                    onclick="window.location.href='{% url 'home' %}'">
+                Voltar
+            </button>
+        </div>
+    </form>
+
+    <p style="margin-top:1.5rem;"></p>
+    <hr>
+
+    <h2>Lista de Usuários cadastrados</h2>
+    <ul class="cad-list">
+        <li class="cad-header">
+            <div>Usuário</div>
+            <div>E-mail</div>
+        </li>
+        {% for usuario in usuarios %}
+            <li class="cad-row">
+                <div class="col-nome">
+                    <a href="?editar={{ usuario.id }}">{{ usuario.username }}</a>
+                </div>
+                <div class="col-descricao">{{ usuario.email }}</div>
+                <div class="col-acoes">
+                    <form method="post"
+                          action="{% url 'usuarios' %}"
+                          style="display:inline-flex; gap:0.6rem; align-items:center;">
+                        {% csrf_token %}
+                        <input type="hidden" name="acao" value="excluir">
+                        <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                        <a href="?editar={{ usuario.id }}" class="btn-small btn-wide">Editar</a>
+                        <button type="submit" class="btn-small btn-wide btn-danger"
+                                onclick="return confirm('Confirma a exclusão deste usuário?');">
+                            Excluir
+                        </button>
+                    </form>
+                </div>
+            </li>
+        {% empty %}
+            <li>Nenhum usuário cadastrado.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock content %}

@@ -24,10 +24,10 @@ body {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    height: 100%;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: hidden;
 }
 
 .conteiner {
@@ -69,17 +69,26 @@ body {
     transform: translateY(-50%);
 }
 
-.main-content{
+/* área central de todas as páginas */
+.main-content {
     flex: 1;
 }
 
-/* FORMULÁRIO DE LOGIN */
+/* -------- LOGIN -------- */
+
+/* fundo do login dentro de main-content */
 .body-login-bg {
+    width: 100%;
+    min-height: calc(100vh - 80px - 60px);  /* 80 header, ~40 footer (ajuste ao seu caso) */
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100%;
     background: #e0e0e0;
+}
+
+/* só quando o body tiver a classe login-page */
+body.login-page {
+    overflow: hidden; /* remove scroll no login, não afeta outras páginas */
 }
 
 .login-panel {
@@ -112,14 +121,42 @@ body {
     margin-bottom: 0.7rem;
 }
 
+/* -------- FORMULÁRIOS CADASTRO -------- */
+
+/* altura padronizada dos campos do formulário de cadastro */
+.cad-form input[type="text"],
+.cad-form input[type="password"],
+.cad-form input[type="email"],
+.cad-form textarea {
+    padding: 0.6rem 0.8rem;
+    font-size: 1.4rem;
+    border: 1px solid #999;
+    border-radius: 4px;
+    margin-top: 0.3rem;
+}
+
+/* larguras específicas — IDs usados no seu template */
+.cad-form #id_username,
+.cad-form #id_email,
+.cad-form #id_senha {
+    width: 100%;
+    max-width: none;
+}
+
+/* afasta campo senha dos botões */
+.cad-form #id_senha {
+    margin-bottom: 1.6rem;
+}
+
+/* inputs genéricos sem width fixa */
 .form-group input {
     padding: 0.8rem;
     font-size: 1.8rem;
     border: 2px solid #444;
     border-radius: 4px;
-    width: 100%;
 }
 
+/* botões do login */
 .form-actions {
     display: flex;
     gap: 1rem;
@@ -158,12 +195,14 @@ body {
     }
 }
 
-/* footer */
+/* -------- FOOTER -------- */
+
 .main-footer-container {
     background-color: #1f1f2e;
     color: #ffffff;
-    padding: 1.25rem 2rem;
+    padding: 0.6rem 2rem;
     font-size: 1.2rem;
+    margin-top: 0;
 }
 
 .main-footer {
@@ -172,7 +211,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-height: 4rem;
+    min-height: 2.4rem;
 }
 
 .main-footer-address {
@@ -183,13 +222,14 @@ body {
     opacity: 0.8;
 }
 
-/* menu principal */
-.main-menu-bar{
+/* -------- MENU PRINCIPAL -------- */
+
+.main-menu-bar {
     background-color: #008000;
     width: 100%;
 }
 
-.main-menu{
+.main-menu {
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
@@ -198,8 +238,8 @@ body {
     padding: 0.8rem 2rem;
 }
 
-/*itens menu principal */
-.main-menu-item{
+/* itens menu principal */
+.main-menu-item {
     color: #ffffff;
     text-decoration: none;
     font-size: 1.6rem;
@@ -208,10 +248,10 @@ body {
 }
 
 /* container com submenu */
-.has-submenu{
+.has-submenu {
     position: relative;
     color: #ffffff;
-    font: size 1.6rem;
+    font-size: 1.6rem;
     font-family: var(--font-primary);
     font-weight: 600;
     cursor: pointer;
@@ -238,18 +278,29 @@ body {
     font-size: 1.4rem;
 }
 
-.submenu a:hover{
+.submenu a:hover {
     background-color: #269fe6;
 }
 
-/* mostra o submenu ao passar o mouse em Segurança */
+/* mostra o submenu ao passar o mouse */
 .has-submenu:hover .submenu {
     display: block;
 }
 
-/* container geral das páginas de cadastro (perfis, permissoes, etc.) */
+/* -------- CONTAINERS CADASTRO -------- */
+
 .cad-container {
-    max-width: 800px;
+    max-width: 1000px;
+    margin: 2rem auto 1rem auto;
+    padding: 2.5rem;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
+}
+
+/* container específico permissões */
+.cad-container-permissoes {
+    max-width: 1100px;
     margin: 2rem auto;
     padding: 2rem 2.5rem;
     background: #ffffff;
@@ -257,8 +308,40 @@ body {
     box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
 }
 
-/* título */
-.cad-container h1 {
+/* painel mais largo para Perfis x Permissões */
+.cad-container-perfis-permissoes {
+    max-width: 1100px;
+    margin: 2rem auto;
+    padding: 2rem 2.5rem;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
+}
+
+.cad-container-perfis-permissoes label {
+    display: block;
+    margin-top: 1rem;
+    font-weight: bold;
+}
+
+.cad-container-perfis-permissoes select {
+    width: 100%;
+    max-width: 300px;
+    padding: 0.6rem 0.8rem;
+    font-size: 1.4rem;
+    border: 1px solid #999;
+    border-radius: 4px;
+    margin-top: 0.3rem;
+}
+
+.cad-container-perfis-permissoes .permissoes-list {
+    margin-top: 0.5rem;
+    margin-left: 1.5rem;
+}
+
+/* títulos containers */
+.cad-container h1,
+.cad-container-permissoes h1 {
     font-size: 2.4rem;
     margin-bottom: 1.5rem;
 }
@@ -270,39 +353,18 @@ body {
     font-weight: bold;
 }
 
-.cad-form input[type="text"],
-.cad-form textarea {
-    width: 100%;
-    padding: 0.6rem 0.8rem;
-    font-size: 1.4rem;
-    border: 1px solid #999;
-    border-radius: 4px;
-    margin-top: 0.3rem;
-}
-
-.cad-form textarea {
-    min-height: 6rem;
-    resize: vertical;
-}
-
-/* contêiner dos botões principais (Salvar / Limpar / Voltar) */
-.cad-form-buttons {
-    display: inline-flex;
-    gap: 0.8rem;
-    margin-top: 1.2rem;
-}
-
-/* lista em forma de colunas (Nome | Descrição | Ações) */
+/* lista em forma de colunas */
 .cad-list {
     list-style: none;
     margin-top: 2rem;
     padding: 0;
 }
 
+/* colunas: Selecionar | Nome | Descrição */
 .cad-header,
 .cad-row {
     display: grid;
-    grid-template-columns: 20% 60% 20%;
+    grid-template-columns: 20% 20% 60%;
     align-items: center;
     gap: 0.5rem;
     padding: 0.3rem 0;
@@ -318,14 +380,18 @@ body {
     border-bottom: 1px solid #eee;
 }
 
-/* colunas de texto alinhadas à altura dos botões */
+/* colunas de texto */
 .col-nome,
 .col-descricao {
     display: flex;
     align-items: center;
 }
 
-/* coluna de ações: botões lado a lado e centralizados verticalmente */
+.cad-row .col-nome {
+    font-weight: normal;
+}
+
+/* coluna de ações */
 .col-acoes {
     display: flex;
     justify-content: flex-end;
@@ -334,7 +400,24 @@ body {
     text-align: right;
 }
 
-/* botões reutilizáveis (já servem para perfis e permissoes) */
+.cad-list-permissoes .cad-header,
+.cad-list-permissoes .cad-row {
+    grid-template-columns: 30% 55% 15%;
+}
+
+.col-nome-permissoes {
+    font-weight: normal;
+}
+
+/* radios/checkboxes centralizados na coluna Selecionar */
+.cad-list-perfis-usuarios .col-selecionar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* -------- BOTÕES -------- */
+
 .btn-small {
     display: inline-block;
     padding: 0.4rem 0.9rem;
@@ -365,31 +448,62 @@ body {
 .form-actions button:hover {
     filter: brightness(1.05);
 }
-/* --- ajustes específicos da tela de Permissões --- */
 
-/* painel um pouco mais largo em Permissões */
-.cad-container-permissoes {
-    max-width: 1100px;
-    margin: 2rem auto;
-    padding: 2rem 2.5rem;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
+/* -------- LISTA DE PERMISSÕES NO PERFIL -------- */
+
+.permissoes-list {
+    list-style: none;
+    margin: 1rem 0 0 0;
+    padding: 0;
+    border-top: 1px solid #eee;
 }
 
-/* colunas de Permissões mais largas (Nome: 25%, Descrição: 60%, Ações: 15%) */
-.cad-list-permissoes .cad-header,
-.cad-list-permissoes .cad-row {
-    grid-template-columns: 30% 55% 15%;
+.permissoes-list-item {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #eee;
 }
 
-/* remover negrito do conteúdo da coluna Nome em Permissões */
-.col-nome-permissoes {
-    font-weight: normal;
+.permissoes-list-item input[type="checkbox"] {
+    margin-right: 0.6rem;
 }
 
-/* opcional: manter o título grande em permissões */
-.cad-container-permissoes h1 {
-    font-size: 2.4rem;
-    margin-bottom: 1.5rem;
+/* -------- USUÁRIOS: LINHA COM ATIVO -------- */
+
+.cad-form-row-usuarios {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.5fr 0.5fr;
+    column-gap: 1.5rem;
+    margin-bottom: 0.7rem;
+}
+
+.cad-form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+/* label + checkbox alinhados como os outros campos */
+.cad-form-group-ativo label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+.cad-form-group input {
+    width: 100%;
+}
+
+.cad-form-group-ativo input[type="checkbox"] {
+    margin-top: 0.6rem;
+    align-self: flex-start;
+}
+
+/* em telas pequenas, empilha os campos */
+@media (max-width: 800px) {
+    .cad-form-row-usuarios {
+        grid-template-columns: 1fr;
+    }
 }

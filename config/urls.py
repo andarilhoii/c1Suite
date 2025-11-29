@@ -20,5 +20,6 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('c1SuiteApp.urls')),  # Redireciona as rotas do app principal
+    
 ]
 

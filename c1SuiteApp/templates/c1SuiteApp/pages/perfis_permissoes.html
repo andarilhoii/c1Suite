@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Helius - Perfis x Permissões{% endblock title %}
+{% block content %}
+<div class="cad-container cad-container-perfis-permissoes">
+    <h1>Vincular Perfis e Permissões</h1>
+
+    <form id="form-perfis-permissoes" method="POST" class="cad-form">
+        {% csrf_token %}
+        <label for="perfil_id">Perfil:</label>
+        <select name="perfil_id" id="perfil_id"
+                onchange="window.location.href='?perfil=' + this.value;">
+            {% for perfil in perfis %}
+            <option value="{{ perfil.id }}"
+                    {% if perfil_selecionado and perfil.id == perfil_selecionado.id %}selected{% endif %}>
+                {{ perfil.nome }}
+            </option>
+            {% endfor %}
+        </select>
+        <label>Permissões:</label>
+        <ul class="permissoes-list">
+            {% for permissao in permissoes %}
+                {% if permissao.id in permissoes_do_perfil %}
+                <li class="permissoes-list-item">
+                    <input type="checkbox"
+                        name="permissoes"
+                        value="{{ permissao.id }}"
+                        checked>
+                    {{ permissao.nome }}
+                </li>
+                {% else %}
+                <li class="permissoes-list-item">
+                    <input type="checkbox"
+                        name="permissoes"
+                        value="{{ permissao.id }}">
+                    {{ permissao.nome }}
+                </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+        <button type="submit" class="btn-small btn-wide">Salvar</button>
+        <button type="button" class="btn-small btn-wide btn-secondary"
+                onclick="window.location.href='{% url 'home' %}'">
+            Voltar
+        </button>
+    </form>
+</div>
+{% endblock content %}
+

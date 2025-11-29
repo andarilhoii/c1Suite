@@ -9,8 +9,8 @@
             <div class="submenu">
                 <a href={% url 'perfis' %}>Perfis</a>
                 <a href={% url 'permissoes' %}>Permissões</a>
-                <a href="#">Grupos</a>
-                <a href="#">Usuários</a>
+                <a href={% url 'perfis_permissoes' %}>Perfis Pemissões</a>
+                <a href={% url 'usuarios' %}>Usuários</a>
                 <a href="#">Grupos Usuários</a>
                 <a href="#">Permissões Usuários</a>
             </div>
@@ -27,4 +27,41 @@
     Principal
 </div
 -->
+<script>
+    let confirmarSaida = true;
+  
+    // Não mostrar aviso quando a navegação for via links do próprio sistema
+    document.querySelectorAll('a').forEach(function (el) {
+      el.addEventListener('click', function () {
+        confirmarSaida = false;
+      });
+    });
+  
+    // Impede interceptar logout normal (clique no menu Sair)
+    document.querySelectorAll('a[href*="logout"]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        confirmarSaida = false;
+      });
+    });
+  
+    // Evento ao tentar sair/voltar/atualizar
+    window.addEventListener('beforeunload', function (e) {
+      if (confirmarSaida) {
+        e.preventDefault();
+        const mensagem = 'você irá sair do sistema! confirma?';
+        // Exibição do aviso depende do navegador
+        e.returnValue = mensagem;
+        return mensagem;
+        // A mensagem customizada pode não aparecer em todos navegadores modernos
+      }
+    });
+  
+    // Opcional: forçar logout apenas se o usuário sair sem usar o menu
+    window.addEventListener('unload', function (e) {
+      if (confirmarSaida) {
+        // Envia requisição para encerrar a sessão
+        navigator.sendBeacon("{% url 'logout' %}");
+      }
+    });
+</script>
 {% endblock content %}  

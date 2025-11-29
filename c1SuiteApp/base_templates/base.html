@@ -3,20 +3,20 @@
 
 <head>
     {% include "c1SuiteApp/partials/head.html" %}
-    <!-- bloco (block) para permitir que o título seja dinâmico na pagina destino -->
     <title>{% block title %}{% endblock title %}</title>
 </head>
 
-<body>
+<body class="{% block body_class %}{% endblock body_class %}">
     {% include "c1SuiteApp/partials/header.html" %}
 
     <main class="main-content">
-        <!-- Bloco que permite alterar o conteúdo da pagina destino -->
         {% block content %}{% endblock content %}
     </main>
 
-    <footer>
-        {% include "c1SuiteApp/partials/footer.html" %}
+    <footer class="main-footer-container">
+        <div class="main-footer">
+            {% include "c1SuiteApp/partials/footer.html" %}
+        </div>
     </footer>
 </body>
 
