@@ -7,40 +7,42 @@
 <div class="cad-container cad-container-permissoes">
     <h1>Lista de Permissões</h1>
 
-    <!-- Formulário para criar/editar permissoes -->
     <form method="POST" class="cad-form">
         {% csrf_token %}
-
-        <!-- id oculto para edição -->
+    
         <input type="hidden" name="id" value="{{ permissoes_editar.id|default_if_none:'' }}">
-        <!-- informa à view que esta requisição é de salvar (create/update) -->
         <input type="hidden" name="acao" value="salvar">
-
-        <label for="nome">Nome:</label>
-        <!-- preenchido quando estiver editando um permissão -->
-        <input type="text"
-               name="nome"
-               id="nome"
-               value="{{ permissoes_editar.nome|default_if_none:'' }}"
-               required>
-        <br>
-
-        <label for="descricao">Descrição:</label>
-        <textarea name="descricao"
-                  id="descricao">{{ permissoes_editar.descricao|default_if_none:'' }}</textarea>
-        <br>
-
-        <!-- botões principais do formulário -->
+    
+        <!-- Nome e Descrição lado a lado -->
+        <div class="cad-form-row-dupla">
+            <div class="cad-form-group">
+                <label for="nome">Nome:</label>
+                <input type="text"
+                       name="nome"
+                       id="nome"
+                       value="{{ permissoes_editar.nome|default_if_none:'' }}"
+                       required>
+            </div>
+    
+            <div class="cad-form-group cad-form-group-descricao">
+                <label for="descricao">Descrição:</label>
+                <textarea name="descricao"
+                          id="descricao">{{ permissoes_editar.descricao|default_if_none:'' }}</textarea>
+            </div>
+        </div>
+    
+        <!-- botões abaixo, com espaçamento -->
         <div class="cad-form-buttons">
-            <button type="submit" class="btn-small btn-wide">Salvar</button>
-
-            <!-- limpar: reseta os campos nome e descricao para vazio
-                 (como a página é carregada com eles em branco, o reset limpa) -->
+            {% if "PERFIS_SUB_SALVAR" in permissoes_nomes %}
+                <button type="submit" class="btn-small btn-wide">Salvar</button>
+            {% else %}
+                <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
+            {% endif %}
+    
             <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
-
-            <!-- voltar para a página principal -->
+    
             <button type="button"
-                    class="btn-small btn-wide btn-secondary"
+                    class="btn-small btn-wide btn-secondary voltar-btn"
                     onclick="window.location.href='{% url 'home' %}'">
                 Voltar
             </button>
@@ -75,15 +77,27 @@
                         {% csrf_token %}
                         <input type="hidden" name="id" value="{{ permissao.id }}">
                         <input type="hidden" name="acao" value="excluir">
-
-                        <!-- link para carregar dados no form -->
-                        <a href="?editar={{ permissao.id }}" class="btn-small btn-wide">Editar</a>
-
-                        <button type="submit"
-                                class="btn-small btn-wide btn-danger"
-                                onclick="return confirm('Confirma a exclusão desta permissão?');">
-                            Excluir
-                        </button>
+                
+                        {% if "PERFIS_SUB_EDITAR" in permissoes_nomes %}
+                            <a href="?editar={{ permissao.id }}" class="btn-small btn-wide">Editar</a>
+                        {% else %}
+                            <a href="#" class="btn-small btn-wide btn-disabled"
+                               tabindex="-1" aria-disabled="true">Editar</a>
+                        {% endif %}
+                
+                        {% if "PERFIS_SUB_EXCLUIR" in permissoes_nomes %}
+                            <button type="submit"
+                                    class="btn-small btn-wide btn-danger"
+                                    onclick="return confirm('Confirma a exclusão desta permissão?');">
+                                Excluir
+                            </button>
+                        {% else %}
+                            <button type="button"
+                                    class="btn-small btn-wide btn-danger btn-disabled"
+                                    tabindex="-1" aria-disabled="true">
+                                Excluir
+                            </button>
+                        {% endif %}
                     </form>
                 </div>
             </li>

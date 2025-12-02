@@ -4,64 +4,61 @@
 {% block content %} 
 <div class="main-menu-bar">
     <nav class="main-menu">
-        <div class="main-menu-item has-submenu">
+        <!-- MENU SEGURANÇA -->
+        {% if "ACESSO_SEGURANCA" in permissoes_nomes %}
+            <div class="main-menu-item has-submenu">
+        {% else %}
+            <div class="main-menu-item has-submenu menu-disabled">
+        {% endif %}
             <span>Segurança</span>
             <div class="submenu">
-                <a href={% url 'perfis' %}>Perfis</a>
-                <a href={% url 'permissoes' %}>Permissões</a>
-                <a href={% url 'perfis_permissoes' %}>Perfis Pemissões</a>
-                <a href={% url 'usuarios' %}>Usuários</a>
-                <a href="#">Grupos Usuários</a>
-                <a href="#">Permissões Usuários</a>
+                <!-- Submenu Perfis -->
+                {% if "ACESSO_PERFIS" in permissoes_nomes %}
+                    <a href="{% url 'perfis' %}">Perfis</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Perfis</a>
+                {% endif %}
+
+                <!-- Submenu Permissões -->
+                {% if "ACESSO_PERMISSOES" in permissoes_nomes %}
+                    <a href="{% url 'permissoes' %}">Permissões</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Permissões</a>
+                {% endif %}
+
+                <!-- Submenu Perfis x Permissões -->
+                {% if "ACESSO_PERFIS_PERMISSOES" in permissoes_nomes %}
+                    <a href="{% url 'perfis_permissoes' %}">Perfis Permissões</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Perfis Permissões</a>
+                {% endif %}
+
+                <!-- Submenu Usuários -->
+                {% if "ACESSO_USUARIOS" in permissoes_nomes %}
+                    <a href="{% url 'usuarios' %}">Usuários</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Usuários</a>
+                {% endif %}
+
+                <a href="#" class="menu-disabled">Grupos Usuários</a>
+                <a href="#" class="menu-disabled">Permissões Usuários</a>
             </div>
         </div>
-            <a href="#" class="main-menu-item">Cadastrados</a>
-            <a href="#" class="main-menu-item">Operações</a>
-            <a href="#" class="main-menu-item">Configurações</a>
-            <a href="#" class="main-menu-item">Sobre</a>
-            <a href="{% url 'logout' %}" class="main-menu-item">Sair</a>
+
+        <!-- demais itens de menu principal: Cadastrados, Operações, etc.
+          você pode criar permissões específicas para eles também -->
+        <a href="#" class="main-menu-item menu-disabled">Cadastrados</a>
+        <a href="#" class="main-menu-item menu-disabled">Operações</a>
+        <a href="#" class="main-menu-item menu-disabled">Configurações</a>
+        <a href="#" class="main-menu-item menu-disabled">Sobre</a>
+
+        <a href="{% url 'logout' %}" class="main-menu-item">Sair</a>
     </nav>
 </div>
+
 <!--
 <div class="principal-content">
     Principal
 </div
 -->
-<script>
-    let confirmarSaida = true;
-  
-    // Não mostrar aviso quando a navegação for via links do próprio sistema
-    document.querySelectorAll('a').forEach(function (el) {
-      el.addEventListener('click', function () {
-        confirmarSaida = false;
-      });
-    });
-  
-    // Impede interceptar logout normal (clique no menu Sair)
-    document.querySelectorAll('a[href*="logout"]').forEach(function (el) {
-      el.addEventListener('click', function () {
-        confirmarSaida = false;
-      });
-    });
-  
-    // Evento ao tentar sair/voltar/atualizar
-    window.addEventListener('beforeunload', function (e) {
-      if (confirmarSaida) {
-        e.preventDefault();
-        const mensagem = 'você irá sair do sistema! confirma?';
-        // Exibição do aviso depende do navegador
-        e.returnValue = mensagem;
-        return mensagem;
-        // A mensagem customizada pode não aparecer em todos navegadores modernos
-      }
-    });
-  
-    // Opcional: forçar logout apenas se o usuário sair sem usar o menu
-    window.addEventListener('unload', function (e) {
-      if (confirmarSaida) {
-        // Envia requisição para encerrar a sessão
-        navigator.sendBeacon("{% url 'logout' %}");
-      }
-    });
-</script>
 {% endblock content %}  

@@ -22,82 +22,123 @@ def logout_view(request):
     return redirect('login')
 
 def perfis_view(request):
-    #CREATE/UPDATE
-    if request.method == 'POST' and request.POST.get('acao') == 'salvar':
-        perfil_id = request.POST.get('id')
-        nome = request.POST.get('nome') 
-        descricao = request.POST.get('descricao', '')
+    # ----- PERMISSÕES DO PERFIL DO USUÁRIO LOGADO -----
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+    
+    # ---------- CREATE / UPDATE ----------
+    if request.method == "POST" and request.POST.get("acao") == "salvar":
+        # se não tiver a permissão, não salva
+        if "PERFIS_SUB_SALVAR" not in permissoes_nomes:
+            return redirect("perfis")
 
-        if perfil_id: #atualização
+        perfil_id = request.POST.get("id")
+        nome = request.POST.get("nome")
+        descricao = request.POST.get("descricao", "")
+
+        if perfil_id:  # atualização
+            # se quiser, pode exigir PERFIS_SUB_EDITAR aqui
             perfil = get_object_or_404(Perfil, id=perfil_id)
             perfil.nome = nome
             perfil.descricao = descricao
             perfil.save()
-        else: # inclusão
+        else:  # inclusão
             Perfil.objects.create(nome=nome, descricao=descricao)
-        return redirect('perfis')
-    
-    #DELETE
-    if request. method == 'POST' and request.POST.get('acao') == 'excluir':
-        perfil_id = request.POST.get('id')
+
+        return redirect("perfis")
+
+    # ---------- DELETE ----------
+    if request.method == "POST" and request.POST.get("acao") == "excluir":
+        if "PERFIS_SUB_EXCLUIR" not in permissoes_nomes:
+            return redirect("perfis")
+
+        perfil_id = request.POST.get("id")
         perfil = get_object_or_404(Perfil, id=perfil_id)
         perfil.delete()
-        return redirect('perfis')
-    
-    #EDIT (carregar dados form)
+        return redirect("perfis")
+
+    # ---------- EDIT (carregar dados no form) ----------
     perfil_editar = None
-    perfil_id = request.GET.get('editar')
-    if perfil_id:
+    perfil_id = request.GET.get("editar")
+    if perfil_id and "PERFIS_SUB_EDITAR" in permissoes_nomes:
         perfil_editar = get_object_or_404(Perfil, id=perfil_id)
-    perfis = Perfil.objects.all().order_by('nome')
-    return render (
-        request, 'c1SuiteApp/pages/perfis.html', {
-            'perfis': perfis,
-            'perfil_editar': perfil_editar
+
+    perfis = Perfil.objects.all().order_by("nome")
+    return render(
+        request,
+        "c1SuiteApp/pages/perfis.html",
+        {
+            "perfis": perfis,
+            "perfil_editar": perfil_editar,
+            "permissoes_nomes": permissoes_nomes,
         },
     )
-    
-    # LIMPAR: só redireciona para a página sem parâmetros
-    if request.method == 'POST' and request.POST.get('acao') == 'limpar':
-        return redirect('perfis')
-    
-def permissoes_view(request):
-    # CREATE / UPDATE
-    if request.method == 'POST' and request.POST.get('acao') == 'salvar':
-        permissoes_id = request.POST.get('id')
-        nome = request.POST.get('nome')
-        descricao = request.POST.get('descricao', '')
 
-        if permissoes_id:  # atualização
+def permissoes_view(request):
+    # ----- PERMISSÕES DO PERFIL DO USUÁRIO LOGADO -----
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
+    # ----- CREATE / UPDATE -----
+    if request.method == "POST" and request.POST.get("acao") == "salvar":
+        # Regra que você definiu:
+        # se o perfil tiver PERFIS_SUB_SALVAR, ele pode incluir N novas permissões
+        if "PERFIS_SUB_SALVAR" not in permissoes_nomes:
+            return redirect("permissoes")
+
+        permissoes_id = request.POST.get("id")
+        nome = request.POST.get("nome", "").strip()
+        descricao = request.POST.get("descricao", "").strip()
+
+        # inclusão de nova permissão
+        if not permissoes_id:
+            Permissao.objects.create(nome=nome, descricao=descricao)
+        else:
+            # atualização de permissão já existente (opcionalmente controlada por outra permissão)
+            # se quiser controlar edição desta tela, crie PERMISSOES_SUB_EDITAR e use aqui
             permissao = get_object_or_404(Permissao, id=permissoes_id)
             permissao.nome = nome
             permissao.descricao = descricao
             permissao.save()
-        else:  # inclusão
-            Permissao.objects.create(nome=nome, descricao=descricao)
 
-        return redirect('permissoes')
+        return redirect("permissoes")
 
-    # DELETE
-    if request.method == 'POST' and request.POST.get('acao') == 'excluir':
-        permissoes_id = request.POST.get('id')
+    # ----- DELETE -----
+    if request.method == "POST" and request.POST.get("acao") == "excluir":
+        # Se quiser controlar exclusão da tela de permissões, crie PERMISSOES_SUB_EXCLUIR
+        # e teste aqui. Por enquanto, vamos deixar sem travar:
+        # if "PERMISSOES_SUB_EXCLUIR" not in permissoes_nomes:
+        #     return redirect("permissoes")
+
+        permissoes_id = request.POST.get("id")
         permissao = get_object_or_404(Permissao, id=permissoes_id)
         permissao.delete()
-        return redirect('permissoes')
+        return redirect("permissoes")
 
-    # EDIT (carregar dados no form) - vem por GET: ?editar=ID
+    # ----- EDIT (carregar dados no form) - GET ?editar=ID -----
     permissao_editar = None
-    permissoes_id = request.GET.get('editar')
+    permissoes_id = request.GET.get("editar")
     if permissoes_id:
+        # se quiser controlar quem pode carregar para edição, crie PERMISSOES_SUB_EDITAR
+        # e teste aqui; por enquanto sempre permite:
         permissao_editar = get_object_or_404(Permissao, id=permissoes_id)
 
-    permissoes = Permissao.objects.all().order_by('nome')
+    permissoes = Permissao.objects.all().order_by("nome")
     return render(
         request,
-        'c1SuiteApp/pages/permissoes.html',
+        "c1SuiteApp/pages/permissoes.html",
         {
-            'permissoes': permissoes,
-            'permissoes_editar': permissao_editar,
+            "permissoes": permissoes,
+            "permissoes_editar": permissao_editar,
+            "permissoes_nomes": permissoes_nomes,
         },
     )
 
@@ -183,7 +224,19 @@ def usuarios_view(request):
     )
 
 def principal_view(request):
-    return render(request, 'c1SuiteApp/pages/principal.html')
+    user = request.user # já vem autenticado por login_required
+
+    # Se o usuário tiver perfil associado, pega os nomes das permissões
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+    context = {
+        "permissoes_nomes": permissoes_nomes
+    }
+
+    return render(request, 'c1SuiteApp/pages/principal.html', context)
     
 def perfis_permissoes_view(request):
     perfis = Perfil.objects.all().order_by('nome')

@@ -42,7 +42,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'c1SuiteApp', 'templates'),  # Templates do app
+            os.path.join(BASE_DIR, 'c1SuiteApp', 'templates'),       # Templates do app
             os.path.join(BASE_DIR, 'c1SuiteApp', 'base_templates'),  # Templates globais
         ],
         'APP_DIRS': True,
@@ -55,6 +55,7 @@ TEMPLATES = [
         },
     },
 ]
+
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
@@ -86,6 +87,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -106,3 +108,15 @@ AUTH_USER_MODEL = 'c1SuiteApp.Usuario'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+# Session settings
+# Expira a sessão ao fechar o navegador (cookie de sessão, não persistente)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # cookie morre ao fechar o browser [web:3][web:19]
+
+# Tempo máximo de vida da sessão (em segundos).
+# Exemplo: 3600 = 1 hora. Ajuste conforme necessidade.
+SESSION_COOKIE_AGE = 60  # padrão seria 1209600 (2 semanas) [web:7][web:16]
+
+# Opcional: renovar o vencimento a cada request autenticado
+# Mantém o usuário logado enquanto houver atividade dentro da janela de SESSION_COOKIE_AGE
+SESSION_SAVE_EVERY_REQUEST = False # útil para sessão expirar só por inatividade [web:10]

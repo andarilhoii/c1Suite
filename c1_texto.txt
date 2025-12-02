@@ -43,7 +43,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'c1SuiteApp', 'templates'),  # Templates do app
+            os.path.join(BASE_DIR, 'c1SuiteApp', 'templates'),       # Templates do app
             os.path.join(BASE_DIR, 'c1SuiteApp', 'base_templates'),  # Templates globais
         ],
         'APP_DIRS': True,
@@ -56,6 +56,7 @@ TEMPLATES = [
         },
     },
 ]
+
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
@@ -87,6 +88,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -107,6 +109,18 @@ AUTH_USER_MODEL = 'c1SuiteApp.Usuario'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+# Session settings
+# Expira a sessão ao fechar o navegador (cookie de sessão, não persistente)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # cookie morre ao fechar o browser [web:3][web:19]
+
+# Tempo máximo de vida da sessão (em segundos).
+# Exemplo: 3600 = 1 hora. Ajuste conforme necessidade.
+SESSION_COOKIE_AGE = 60  # padrão seria 1209600 (2 semanas) [web:7][web:16]
+
+# Opcional: renovar o vencimento a cada request autenticado
+# Mantém o usuário logado enquanto houver atividade dentro da janela de SESSION_COOKIE_AGE
+SESSION_SAVE_EVERY_REQUEST = False # útil para sessão expirar só por inatividade [web:10]
 
 ----------------------------------------------------//-----------------------------------------------
 
@@ -145,16 +159,6 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 
 
-# Model de Perfil
-class Perfil(models.Model):
-    nome = models.CharField(max_length=50, unique=True)
-    descricao = models.TextField(blank=True)
-    permissoes = models.ManyToManyField('Permissao', blank=True, related_name='perfis')
-
-    def __str__(self):
-        return self.nome
-
-
 # Model de Permissão
 class Permissao(models.Model):
     nome = models.CharField(max_length=50, unique=True)
@@ -164,11 +168,26 @@ class Permissao(models.Model):
         return self.nome
 
 
+# Model de Perfil
+class Perfil(models.Model):
+    nome = models.CharField(max_length=50, unique=True)
+    descricao = models.TextField(blank=True)
+    # ManyToMany simples: usa a tabela auto-gerada c1SuiteApp_perfil_permissoes
+    permissoes = models.ManyToManyField(
+        Permissao,
+        blank=True,
+        related_name="perfis",
+    )
+
+    def __str__(self):
+        return self.nome
+
+
 # Manager customizado para o usuário
 class UsuarioManager(BaseUserManager):
     def create_user(self, username, email, password=None, **extra_fields):
         if not email:
-            raise ValueError('Usuário deve ter um email válido.')
+            raise ValueError("Usuário deve ter um email válido.")
         email = self.normalize_email(email)
         user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
@@ -176,18 +195,19 @@ class UsuarioManager(BaseUserManager):
         return user
 
     def create_superuser(self, username, email, password=None, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
 
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser deve ter is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser deve ter is_superuser=True.')
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser deve ter is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser deve ter is_superuser=True.")
 
         # Importar Perfil aqui para evitar circular import
-        from .models import Perfil
-        perfil_admin, created = Perfil.objects.get_or_create(nome='Administrador')
-        extra_fields.setdefault('perfil', perfil_admin)
+        from .models import Perfil  # noqa
+
+        perfil_admin, created = Perfil.objects.get_or_create(nome="Administrador")
+        extra_fields.setdefault("perfil", perfil_admin)
 
         return self.create_user(username, email, password, **extra_fields)
 
@@ -200,17 +220,13 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     ativo = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email']
+    USERNAME_FIELD = "username"
+    REQUIRED_FIELDS = ["email"]
 
     objects = UsuarioManager()
 
     def __str__(self):
         return self.username
-
-class PerfilPermissao(models.Model):
-    perfil = models.ForeignKey(Perfil, on_delete=models.CASCADE)
-    permissao = models.ForeignKey(Permissao, on_delete=models.CASCADE)
 
 ----------------------------------------------------//-----------------------------------------------
 
@@ -219,6 +235,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
 from .models import Perfil, Permissao, Usuario
 from .forms import LoginForm, UsuarioForm
+from django.urls import reverse       
+from django.contrib import messages   
 
 # Create your views here.
 def login_view(request):
@@ -237,82 +255,123 @@ def logout_view(request):
     return redirect('login')
 
 def perfis_view(request):
-    #CREATE/UPDATE
-    if request.method == 'POST' and request.POST.get('acao') == 'salvar':
-        perfil_id = request.POST.get('id')
-        nome = request.POST.get('nome') 
-        descricao = request.POST.get('descricao', '')
+    # ----- PERMISSÕES DO PERFIL DO USUÁRIO LOGADO -----
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+    
+    # ---------- CREATE / UPDATE ----------
+    if request.method == "POST" and request.POST.get("acao") == "salvar":
+        # se não tiver a permissão, não salva
+        if "PERFIS_SUB_SALVAR" not in permissoes_nomes:
+            return redirect("perfis")
 
-        if perfil_id: #atualização
+        perfil_id = request.POST.get("id")
+        nome = request.POST.get("nome")
+        descricao = request.POST.get("descricao", "")
+
+        if perfil_id:  # atualização
+            # se quiser, pode exigir PERFIS_SUB_EDITAR aqui
             perfil = get_object_or_404(Perfil, id=perfil_id)
             perfil.nome = nome
             perfil.descricao = descricao
             perfil.save()
-        else: # inclusão
+        else:  # inclusão
             Perfil.objects.create(nome=nome, descricao=descricao)
-        return redirect('perfis')
-    
-    #DELETE
-    if request. method == 'POST' and request.POST.get('acao') == 'excluir':
-        perfil_id = request.POST.get('id')
+
+        return redirect("perfis")
+
+    # ---------- DELETE ----------
+    if request.method == "POST" and request.POST.get("acao") == "excluir":
+        if "PERFIS_SUB_EXCLUIR" not in permissoes_nomes:
+            return redirect("perfis")
+
+        perfil_id = request.POST.get("id")
         perfil = get_object_or_404(Perfil, id=perfil_id)
         perfil.delete()
-        return redirect('perfis')
-    
-    #EDIT (carregar dados form)
+        return redirect("perfis")
+
+    # ---------- EDIT (carregar dados no form) ----------
     perfil_editar = None
-    perfil_id = request.GET.get('editar')
-    if perfil_id:
+    perfil_id = request.GET.get("editar")
+    if perfil_id and "PERFIS_SUB_EDITAR" in permissoes_nomes:
         perfil_editar = get_object_or_404(Perfil, id=perfil_id)
-    perfis = Perfil.objects.all().order_by('nome')
-    return render (
-        request, 'c1SuiteApp/pages/perfis.html', {
-            'perfis': perfis,
-            'perfil_editar': perfil_editar
+
+    perfis = Perfil.objects.all().order_by("nome")
+    return render(
+        request,
+        "c1SuiteApp/pages/perfis.html",
+        {
+            "perfis": perfis,
+            "perfil_editar": perfil_editar,
+            "permissoes_nomes": permissoes_nomes,
         },
     )
-    
-    # LIMPAR: só redireciona para a página sem parâmetros
-    if request.method == 'POST' and request.POST.get('acao') == 'limpar':
-        return redirect('perfis')
-    
-def permissoes_view(request):
-    # CREATE / UPDATE
-    if request.method == 'POST' and request.POST.get('acao') == 'salvar':
-        permissoes_id = request.POST.get('id')
-        nome = request.POST.get('nome')
-        descricao = request.POST.get('descricao', '')
 
-        if permissoes_id:  # atualização
+def permissoes_view(request):
+    # ----- PERMISSÕES DO PERFIL DO USUÁRIO LOGADO -----
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
+    # ----- CREATE / UPDATE -----
+    if request.method == "POST" and request.POST.get("acao") == "salvar":
+        # Regra que você definiu:
+        # se o perfil tiver PERFIS_SUB_SALVAR, ele pode incluir N novas permissões
+        if "PERFIS_SUB_SALVAR" not in permissoes_nomes:
+            return redirect("permissoes")
+
+        permissoes_id = request.POST.get("id")
+        nome = request.POST.get("nome", "").strip()
+        descricao = request.POST.get("descricao", "").strip()
+
+        # inclusão de nova permissão
+        if not permissoes_id:
+            Permissao.objects.create(nome=nome, descricao=descricao)
+        else:
+            # atualização de permissão já existente (opcionalmente controlada por outra permissão)
+            # se quiser controlar edição desta tela, crie PERMISSOES_SUB_EDITAR e use aqui
             permissao = get_object_or_404(Permissao, id=permissoes_id)
             permissao.nome = nome
             permissao.descricao = descricao
             permissao.save()
-        else:  # inclusão
-            Permissao.objects.create(nome=nome, descricao=descricao)
 
-        return redirect('permissoes')
+        return redirect("permissoes")
 
-    # DELETE
-    if request.method == 'POST' and request.POST.get('acao') == 'excluir':
-        permissoes_id = request.POST.get('id')
+    # ----- DELETE -----
+    if request.method == "POST" and request.POST.get("acao") == "excluir":
+        # Se quiser controlar exclusão da tela de permissões, crie PERMISSOES_SUB_EXCLUIR
+        # e teste aqui. Por enquanto, vamos deixar sem travar:
+        # if "PERMISSOES_SUB_EXCLUIR" not in permissoes_nomes:
+        #     return redirect("permissoes")
+
+        permissoes_id = request.POST.get("id")
         permissao = get_object_or_404(Permissao, id=permissoes_id)
         permissao.delete()
-        return redirect('permissoes')
+        return redirect("permissoes")
 
-    # EDIT (carregar dados no form) - vem por GET: ?editar=ID
+    # ----- EDIT (carregar dados no form) - GET ?editar=ID -----
     permissao_editar = None
-    permissoes_id = request.GET.get('editar')
+    permissoes_id = request.GET.get("editar")
     if permissoes_id:
+        # se quiser controlar quem pode carregar para edição, crie PERMISSOES_SUB_EDITAR
+        # e teste aqui; por enquanto sempre permite:
         permissao_editar = get_object_or_404(Permissao, id=permissoes_id)
 
-    permissoes = Permissao.objects.all().order_by('nome')
+    permissoes = Permissao.objects.all().order_by("nome")
     return render(
         request,
-        'c1SuiteApp/pages/permissoes.html',
+        "c1SuiteApp/pages/permissoes.html",
         {
-            'permissoes': permissoes,
-            'permissoes_editar': permissao_editar,
+            "permissoes": permissoes,
+            "permissoes_editar": permissao_editar,
+            "permissoes_nomes": permissoes_nomes,
         },
     )
 
@@ -320,28 +379,97 @@ def usuarios_view(request):
     usuarios = Usuario.objects.all()
     perfis = Perfil.objects.all().order_by("nome")
 
-    if request.method == "POST":
-        form = UsuarioForm(request.POST)
-        if form.is_valid():
-            usuario = form.save(commit=False)
-            usuario.set_password(form.cleaned_data["senha"])
-            usuario.save()
-            return redirect("usuarios")
-    else:
-        form = UsuarioForm()
+    editar_id = request.GET.get("editar")
 
+    # ---------- MODO EDIÇÃO / NOVO ----------
+    if editar_id:
+        usuario_editar = get_object_or_404(Usuario, pk=editar_id)
+        username_inicial = usuario_editar.username
+        email_inicial = usuario_editar.email
+        perfil_associado = getattr(usuario_editar, "perfil", None)
+    else:
+        usuario_editar = None
+        username_inicial = ""
+        email_inicial = ""
+        perfil_associado = None
+
+    # ---------- TRATAMENTO DO POST ----------
+    if request.method == "POST":
+        acao = request.POST.get("acao")
+
+        # --- EXCLUSÃO vinda da lista ---
+        if acao == "excluir":
+            usuario_id = request.POST.get("usuario_id")
+
+            if not usuario_id:
+                messages.error(request, "ID de usuário inválido para exclusão.")
+                return redirect(reverse("usuarios"))
+
+            try:
+                usuario_del = get_object_or_404(Usuario, pk=int(usuario_id))
+            except (ValueError, TypeError):
+                messages.error(request, "ID de usuário inválido para exclusão.")
+                return redirect(reverse("usuarios"))
+
+            usuario_del.delete()
+            messages.success(request, "Usuário excluído com sucesso.")
+            return redirect(reverse("usuarios"))
+
+        # --- CADASTRO / EDIÇÃO ---
+        username = request.POST.get("username", "").strip()
+        email = request.POST.get("email", "").strip()
+        senha = request.POST.get("senha", "")
+        perfil_id = request.POST.get("perfil_associado")
+        ativo = request.POST.get("ativo") == "on"
+
+        if not username or not email or not senha:
+            messages.error(request, "Preencha usuário, e-mail e senha.")
+        elif not perfil_id:
+            messages.error(request, "Selecione um perfil para o usuário.")
+        else:
+            if usuario_editar:
+                usuario = usuario_editar
+            else:
+                usuario = Usuario()
+
+            usuario.username = username
+            usuario.email = email
+            usuario.set_password(senha)
+            usuario.ativo = ativo
+            usuario.perfil_id = perfil_id  # FK única
+            usuario.save()
+
+            messages.success(request, "Usuário salvo com sucesso.")
+            return redirect(reverse("usuarios"))
+
+    # ---------- RENDERIZAÇÃO ----------
     return render(
         request,
         "c1SuiteApp/pages/usuarios.html",
         {
             "usuarios": usuarios,
-            "form": form,
             "perfis": perfis,
+            "usuario_editar": usuario_editar,
+            "username_inicial": username_inicial,
+            "email_inicial": email_inicial,
+            "perfil_associado": perfil_associado,
         },
     )
 
 def principal_view(request):
-    return render(request, 'c1SuiteApp/pages/principal.html')
+    user = request.user # já vem autenticado por login_required
+
+    # Se o usuário tiver perfil associado, pega os nomes das permissões
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+    context = {
+        "permissoes_nomes": permissoes_nomes
+    }
+
+    return render(request, 'c1SuiteApp/pages/principal.html', context)
     
 def perfis_permissoes_view(request):
     perfis = Perfil.objects.all().order_by('nome')
@@ -392,109 +520,160 @@ arquivo	base.html:
 
 <head>
     {% include "c1SuiteApp/partials/head.html" %}
-    <!-- bloco (block) para permitir que o título seja dinâmico na pagina destino -->
     <title>{% block title %}{% endblock title %}</title>
 </head>
 
-<body>
+<body class="{% block body_class %}{% endblock body_class %}">
+    {% if request.path == '/login/' %}
     {% include "c1SuiteApp/partials/header.html" %}
+    {% else %}
+    {% include "c1SuiteApp/partials/header_logged.html" %}
+    {% endif %}
 
     <main class="main-content">
-        <!-- Bloco que permite alterar o conteúdo da pagina destino -->
         {% block content %}{% endblock content %}
     </main>
 
-    <footer>
-        {% include "c1SuiteApp/partials/footer.html" %}
+    <footer class="main-footer-container">
+        <div class="main-footer">
+            {% include "c1SuiteApp/partials/footer.html" %}
+        </div>
     </footer>
+
+    <script>
+        // Não aplicar na tela de login
+        if (!document.body.classList.contains('login-page')) {
+
+            // Se não existir token na sessionStorage, significa que
+            // esta aba/navegador foi aberta "do zero" -> força logout
+            if (!sessionStorage.getItem('c1_aberta')) {
+                sessionStorage.setItem('c1_aberta', '1');
+                window.location.href = "{% url 'logout' %}";
+            }
+
+            let confirmarSaida = true;
+
+            // Qualquer navegação interna/mudança via link ou botão desativa logout automático
+            document.querySelectorAll('a, button').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    confirmarSaida = false;
+                });
+            });
+
+            // Logout normal pelo menu
+            document.querySelectorAll('a[href*="logout"]').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    confirmarSaida = false;
+                });
+            });
+
+            // Sem popup: se o usuário sair "bruscamente", envia logout
+            window.addEventListener('unload', function () {
+                if (confirmarSaida) {
+                    navigator.sendBeacon("{% url 'logout' %}");
+                }
+            });
+        }
+    </script>
 </body>
 
 </html>
 
 ----------------------------------------------------//-----------------------------------------------
 
-arquivo principal.html:
 {% extends "base.html" %}
 <!-- bloco que permite alterar o título desta pagina -->
 {% block title %} Helius - Home {% endblock title%}
 {% block content %} 
 <div class="main-menu-bar">
     <nav class="main-menu">
-        <div class="main-menu-item has-submenu">
+        <!-- MENU SEGURANÇA -->
+        {% if "ACESSO_SEGURANCA" in permissoes_nomes %}
+            <div class="main-menu-item has-submenu">
+        {% else %}
+            <div class="main-menu-item has-submenu menu-disabled">
+        {% endif %}
             <span>Segurança</span>
             <div class="submenu">
-                <a href={% url 'perfis' %}>Perfis</a>
-                <a href={% url 'permissoes' %}>Permissões</a>
-                <a href={% url 'perfis_permissoes' %}>Perfis Pemissões</a>
-                <a href={% url 'usuarios' %}>Usuários</a>
-                <a href="#">Grupos Usuários</a>
-                <a href="#">Permissões Usuários</a>
+                <!-- Submenu Perfis -->
+                {% if "ACESSO_PERFIS" in permissoes_nomes %}
+                    <a href="{% url 'perfis' %}">Perfis</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Perfis</a>
+                {% endif %}
+
+                <!-- Submenu Permissões -->
+                {% if "ACESSO_PERMISSOES" in permissoes_nomes %}
+                    <a href="{% url 'permissoes' %}">Permissões</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Permissões</a>
+                {% endif %}
+
+                <!-- Submenu Perfis x Permissões -->
+                {% if "ACESSO_PERFIS_PERMISSOES" in permissoes_nomes %}
+                    <a href="{% url 'perfis_permissoes' %}">Perfis Permissões</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Perfis Permissões</a>
+                {% endif %}
+
+                <!-- Submenu Usuários -->
+                {% if "ACESSO_USUARIOS" in permissoes_nomes %}
+                    <a href="{% url 'usuarios' %}">Usuários</a>
+                {% else %}
+                    <a href="#" class="menu-disabled">Usuários</a>
+                {% endif %}
+
+                <a href="#" class="menu-disabled">Grupos Usuários</a>
+                <a href="#" class="menu-disabled">Permissões Usuários</a>
             </div>
         </div>
-            <a href="#" class="main-menu-item">Cadastrados</a>
-            <a href="#" class="main-menu-item">Operações</a>
-            <a href="#" class="main-menu-item">Configurações</a>
-            <a href="#" class="main-menu-item">Sobre</a>
-            <a href="{% url 'logout' %}" class="main-menu-item">Sair</a>
+
+        <!-- demais itens de menu principal: Cadastrados, Operações, etc.
+          você pode criar permissões específicas para eles também -->
+        <a href="#" class="main-menu-item menu-disabled">Cadastrados</a>
+        <a href="#" class="main-menu-item menu-disabled">Operações</a>
+        <a href="#" class="main-menu-item menu-disabled">Configurações</a>
+        <a href="#" class="main-menu-item menu-disabled">Sobre</a>
+
+        <a href="{% url 'logout' %}" class="main-menu-item">Sair</a>
     </nav>
 </div>
+
 <!--
 <div class="principal-content">
     Principal
 </div
 -->
-<script>
-    let confirmarSaida = true;
-  
-    // Não mostrar aviso quando a navegação for via links do próprio sistema
-    document.querySelectorAll('a').forEach(function (el) {
-      el.addEventListener('click', function () {
-        confirmarSaida = false;
-      });
-    });
-  
-    // Impede interceptar logout normal (clique no menu Sair)
-    document.querySelectorAll('a[href*="logout"]').forEach(function (el) {
-      el.addEventListener('click', function () {
-        confirmarSaida = false;
-      });
-    });
-  
-    // Evento ao tentar sair/voltar/atualizar
-    window.addEventListener('beforeunload', function (e) {
-      if (confirmarSaida) {
-        e.preventDefault();
-        const mensagem = 'você irá sair do sistema! confirma?';
-        // Exibição do aviso depende do navegador
-        e.returnValue = mensagem;
-        return mensagem;
-        // A mensagem customizada pode não aparecer em todos navegadores modernos
-      }
-    });
-  
-    // Opcional: forçar logout apenas se o usuário sair sem usar o menu
-    window.addEventListener('unload', function (e) {
-      if (confirmarSaida) {
-        // Envia requisição para encerrar a sessão
-        navigator.sendBeacon("{% url 'logout' %}");
-      }
-    });
-</script>
 {% endblock content %}  
 
-<!-- inicio do bloco que permite alterar o conteúdo dessa página-->
+------------------------------------------------//---------------------------------------------
+
+arquivo login.html:
+{% extends "base.html" %}
+
+{% block title %}Helius - Login{% endblock title %}
+{% block body_class %}login-page{% endblock body_class %}
+
 {% block content %}
 <div class="body-login-bg">
     <div class="login-panel">
-        <form class="login-form">
+        <form class="login-form" method="post" action="">
+            {% csrf_token %}
             <div class="form-group">
-                <label for="id_usuario">Usuário</label>
-                <input type="text" id="id_usuario" placeholder="Digite o seu usuário">
+                <label for="{{ form.username.id_for_label }}">Usuário</label>
+                {{ form.username }}
             </div>
             <div class="form-group">
-                <label for="id_senha">Senha</label>
-                <input type="password" id="id_senha" placeholder="digite a sua senha">
+                <label for="{{ form.password.id_for_label }}">Senha</label>
+                {{ form.password }}
             </div>
+
+            {% if form.errors %}
+                <div class="error-messages">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
             <div class="form-actions">
                 <button type="submit">Entrar</button>
                 <button type="reset" class="reset-btn">Reset</button>
@@ -506,48 +685,13 @@ arquivo principal.html:
 
 ----------------------------------------------------//-----------------------------------------------
 
-arquivo principal.html - código:
-{% extends "base.html" %}
-<!-- bloco que permite alterar o título desta pagina -->
-{% block title %} Helius - Home {% endblock title%}
-{% block content %} 
-<div class="main-menu-bar">
-    <nav class="main-menu">
-        <div class="main-menu-item has-submenu">
-            <span>Segurança</span>
-            <div class="submenu">
-                <a href={% url 'perfis' %}>Perfis</a>
-                <a href={% url 'permissoes' %}>Permissões</a>
-                <a href={% url 'perfis_permissoes' %}>Perfis Pemissões</a>
-                <a href="#">Usuários</a>
-                <a href="#">Grupos Usuários</a>
-                <a href="#">Permissões Usuários</a>
-            </div>
-        </div>
-            <a href="#" class="main-menu-item">Cadastrados</a>
-            <a href="#" class="main-menu-item">Operações</a>
-            <a href="#" class="main-menu-item">Configurações</a>
-            <a href="#" class="main-menu-item">Sobre</a>
-            <a href="{% url 'logout' %}" class="main-menu-item">Sair</a>
-    </nav>
-</div>
-<!--
-<div class="principal-content">
-    Principal
-</div
--->
-{% endblock content %}  
-
-----------------------------------------------------//-----------------------------------------------
-
 arquivo perfis.html:
 {% extends "base.html" %}
-<!-- bloco que permite alterar o título desta pagina -->
 {% block title %} Helius - Perfis {% endblock title%}
 
-<!-- inicio do bloco que permite alterar o conteúdo dessa página-->
 {% block content %}
 <div class="cad-container">
+
     <h1>Lista de Perfis</h1>
 
     <!-- Formulário para criar/editar perfil -->
@@ -559,31 +703,38 @@ arquivo perfis.html:
         <!-- informa à view que esta requisição é de salvar (create/update) -->
         <input type="hidden" name="acao" value="salvar">
 
-        <label for="nome">Nome:</label>
-        <!-- preenchido quando estiver editando um perfil -->
-        <input type="text"
-               name="nome"
-               id="nome"
-               value="{{ perfil_editar.nome|default_if_none:'' }}"
-               required>
-        <br>
+        <!-- Linha com Nome e Descrição lado a lado -->
+        <div class="cad-form-row-dupla">
+            <div class="cad-form-group cad-form-group-nome">
+                <label for="nome">Nome:</label>
+                <input type="text"
+                       name="nome"
+                       id="nome"
+                       value="{{ perfil_editar.nome|default_if_none:'' }}"
+                       required>
+            </div>
 
-        <label for="descricao">Descrição:</label>
-        <textarea name="descricao"
-                  id="descricao">{{ perfil_editar.descricao|default_if_none:'' }}</textarea>
-        <br>
+            <div class="cad-form-group cad-form-group-descricao">
+                <label for="descricao">Descrição:</label>
+                <textarea name="descricao"
+                          id="descricao">{{ perfil_editar.descricao|default_if_none:'' }}</textarea>
+            </div>
+        </div>
 
         <!-- botões principais do formulário -->
         <div class="cad-form-buttons">
-            <button type="submit" class="btn-small btn-wide">Salvar</button>
+            <!-- SALVAR -->
+            {% if "PERFIS_SUB_SALVAR" in permissoes_nomes %}
+                <button type="submit" class="btn-small btn-wide">Salvar</button>
+            {% else %}
+                <!-- não envia POST -->
+                <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
+            {% endif %}
 
-            <!-- limpar: reseta os campos nome e descricao para vazio
-                 (como a página é carregada com eles em branco, o reset limpa) -->
             <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
 
-            <!-- voltar para a página principal -->
             <button type="button"
-                    class="btn-small btn-wide btn-secondary"
+                    class="btn-small btn-wide btn-secondary voltar-btn"
                     onclick="window.location.href='{% url 'home' %}'">
                 Voltar
             </button>
@@ -593,40 +744,51 @@ arquivo perfis.html:
 
     <!-- Listagem dos perfis -->
     <ul class="cad-list">
-        <!-- cabeçalho das colunas -->
         <li class="cad-header">
             <div>Nome</div>
             <div>Descrição</div>
-            <div class="col-acoes">Ações</div>
         </li>
 
         {% for perfil in perfis %}
             <li class="cad-row">
-                <!-- coluna nome -->
                 <div class="col-nome">
                     <strong>{{ perfil.nome }}</strong>
                 </div>
 
-                <!-- coluna descrição -->
                 <div class="col-descricao">
                     {{ perfil.descricao|linebreaksbr }}
                 </div>
 
-                <!-- coluna ações -->
                 <div class="col-acoes">
                     <form method="post" style="display:inline-flex; gap: 0.6rem; align-items: center;">
                         {% csrf_token %}
                         <input type="hidden" name="id" value="{{ perfil.id }}">
                         <input type="hidden" name="acao" value="excluir">
 
-                        <!-- link para carregar dados no form -->
-                        <a href="?editar={{ perfil.id }}" class="btn-small btn-wide">Editar</a>
+                        <!-- EDITAR -->
+                        {% if "PERFIS_SUB_EDITAR" in permissoes_nomes %}
+                            <a href="?editar={{ perfil.id }}" class="btn-small btn-wide">Editar</a>
+                        {% else %}
+                            <!-- sem ?editar, não carrega modo edição -->
+                            <a href="#" class="btn-small btn-wide btn-disabled"
+                               tabindex="-1" aria-disabled="true">Editar</a>
+                        {% endif %}
 
-                        <button type="submit"
-                                class="btn-small btn-wide btn-danger"
-                                onclick="return confirm('Confirma a exclusão deste perfil?');">
-                            Excluir
-                        </button>
+                        <!-- EXCLUIR -->
+                        {% if "PERFIS_SUB_EXCLUIR" in permissoes_nomes %}
+                            <button type="submit"
+                                    class="btn-small btn-wide btn-danger"
+                                    onclick="return confirm('Confirma a exclusão deste perfil?');">
+                                Excluir
+                            </button>
+                        {% else %}
+                            <!-- type="button" para não enviar POST -->
+                            <button type="button"
+                                    class="btn-small btn-wide btn-danger btn-disabled"
+                                    tabindex="-1" aria-disabled="true">
+                                Excluir
+                            </button>
+                        {% endif %}
                     </form>
                 </div>
             </li>
@@ -649,40 +811,42 @@ arquivo permissoes.html:
 <div class="cad-container cad-container-permissoes">
     <h1>Lista de Permissões</h1>
 
-    <!-- Formulário para criar/editar permissoes -->
     <form method="POST" class="cad-form">
         {% csrf_token %}
-
-        <!-- id oculto para edição -->
+    
         <input type="hidden" name="id" value="{{ permissoes_editar.id|default_if_none:'' }}">
-        <!-- informa à view que esta requisição é de salvar (create/update) -->
         <input type="hidden" name="acao" value="salvar">
-
-        <label for="nome">Nome:</label>
-        <!-- preenchido quando estiver editando um permissão -->
-        <input type="text"
-               name="nome"
-               id="nome"
-               value="{{ permissoes_editar.nome|default_if_none:'' }}"
-               required>
-        <br>
-
-        <label for="descricao">Descrição:</label>
-        <textarea name="descricao"
-                  id="descricao">{{ permissoes_editar.descricao|default_if_none:'' }}</textarea>
-        <br>
-
-        <!-- botões principais do formulário -->
+    
+        <!-- Nome e Descrição lado a lado -->
+        <div class="cad-form-row-dupla">
+            <div class="cad-form-group">
+                <label for="nome">Nome:</label>
+                <input type="text"
+                       name="nome"
+                       id="nome"
+                       value="{{ permissoes_editar.nome|default_if_none:'' }}"
+                       required>
+            </div>
+    
+            <div class="cad-form-group cad-form-group-descricao">
+                <label for="descricao">Descrição:</label>
+                <textarea name="descricao"
+                          id="descricao">{{ permissoes_editar.descricao|default_if_none:'' }}</textarea>
+            </div>
+        </div>
+    
+        <!-- botões abaixo, com espaçamento -->
         <div class="cad-form-buttons">
-            <button type="submit" class="btn-small btn-wide">Salvar</button>
-
-            <!-- limpar: reseta os campos nome e descricao para vazio
-                 (como a página é carregada com eles em branco, o reset limpa) -->
+            {% if "PERFIS_SUB_SALVAR" in permissoes_nomes %}
+                <button type="submit" class="btn-small btn-wide">Salvar</button>
+            {% else %}
+                <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
+            {% endif %}
+    
             <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
-
-            <!-- voltar para a página principal -->
+    
             <button type="button"
-                    class="btn-small btn-wide btn-secondary"
+                    class="btn-small btn-wide btn-secondary voltar-btn"
                     onclick="window.location.href='{% url 'home' %}'">
                 Voltar
             </button>
@@ -717,15 +881,27 @@ arquivo permissoes.html:
                         {% csrf_token %}
                         <input type="hidden" name="id" value="{{ permissao.id }}">
                         <input type="hidden" name="acao" value="excluir">
-
-                        <!-- link para carregar dados no form -->
-                        <a href="?editar={{ permissao.id }}" class="btn-small btn-wide">Editar</a>
-
-                        <button type="submit"
-                                class="btn-small btn-wide btn-danger"
-                                onclick="return confirm('Confirma a exclusão desta permissão?');">
-                            Excluir
-                        </button>
+                
+                        {% if "PERFIS_SUB_EDITAR" in permissoes_nomes %}
+                            <a href="?editar={{ permissao.id }}" class="btn-small btn-wide">Editar</a>
+                        {% else %}
+                            <a href="#" class="btn-small btn-wide btn-disabled"
+                               tabindex="-1" aria-disabled="true">Editar</a>
+                        {% endif %}
+                
+                        {% if "PERFIS_SUB_EXCLUIR" in permissoes_nomes %}
+                            <button type="submit"
+                                    class="btn-small btn-wide btn-danger"
+                                    onclick="return confirm('Confirma a exclusão desta permissão?');">
+                                Excluir
+                            </button>
+                        {% else %}
+                            <button type="button"
+                                    class="btn-small btn-wide btn-danger btn-disabled"
+                                    tabindex="-1" aria-disabled="true">
+                                Excluir
+                            </button>
+                        {% endif %}
                     </form>
                 </div>
             </li>
@@ -735,7 +911,6 @@ arquivo permissoes.html:
     </ul>
 </div>
 {% endblock content %}
-
 ----------------------------------------------------//-----------------------------------------------
 
 arquivo perfis_permissoes.html:
@@ -779,7 +954,7 @@ arquivo perfis_permissoes.html:
             {% endfor %}
         </ul>
         <button type="submit" class="btn-small btn-wide">Salvar</button>
-        <button type="button" class="btn-small btn-wide btn-secondary"
+        <button type="button" class="btn-small btn-wide btn-secondary voltar-btn"
                 onclick="window.location.href='{% url 'home' %}'">
             Voltar
         </button>
@@ -797,64 +972,85 @@ arquivo usuarios.html:
 <div class="cad-container">
     <h1>Cadastro de Usuários</h1>
 
-    <form method="POST" class="cad-form">
+    <!-- FORM ÚNICO: dados + perfil -->
+    <form method="POST" class="cad-form" action="{% url 'usuarios' %}">
         {% csrf_token %}
-        <label for="id_username">Usuário</label>
-        <input type="text" name="username" id="id_username"
-               value="{{ form.username.value|default_if_none:'' }}" required>
+        <input type="hidden" name="acao" value="salvar">
 
-        <label for="id_email">E-mail</label>
-        <input type="email" name="email" id="id_email"
-               value="{{ form.email.value|default_if_none:'' }}" required>
+        <!-- Linha com Usuário | Senha | E-mail | Ativo -->
+        <div class="cad-form-row-usuarios">
+            <div class="cad-form-group">
+                <label for="id_username">Usuário</label>
+                <input type="text" name="username" id="id_username"
+                       value="{{ username_inicial|default_if_none:'' }}"
+                       autocomplete="off" required>
+            </div>
 
-        <label for="id_senha">Senha</label>
-        <input type="password" name="senha" id="id_senha" required>
+            <div class="cad-form-group">
+                <label for="id_senha">Senha</label>
+                <input type="password" name="senha" id="id_senha"
+                       value="" autocomplete="new-password" required>
+            </div>
 
-        <label for="id_perfil">Perfil</label>
-        <select name="perfil" id="id_perfil" required>
+            <div class="cad-form-group cad-form-email">
+                <label for="id_email">E-mail</label>
+                <input type="email" name="email" id="id_email"
+                       value="{{ email_inicial|default_if_none:'' }}"
+                       autocomplete="off" required>
+            </div>
+
+            <!-- label em cima, checkbox alinhado com os inputs -->
+            <div class="cad-form-group cad-form-group-ativo">
+                <label for="id_ativo">Ativo</label>
+                <input type="checkbox" name="ativo" id="id_ativo"
+                       {% if usuario_editar and usuario_editar.ativo %}checked{% endif %}>
+            </div>
+        </div>
+
+        <hr>
+
+        <h2>Lista de Perfis</h2>
+        <ul class="cad-list cad-list-perfis-usuarios" style="margin-top: 1rem;">
+            <li class="cad-header">
+                <div class="col-selecionar">Selecionar</div>
+                <div class="col-nome">Nome</div>
+                <div class="col-descricao">Descrição</div>
+            </li>
             {% for perfil in perfis %}
-                <option value="{{ perfil.id }}">{{ perfil.nome }}</option>
+                <li class="cad-row">
+                    <div class="col-selecionar">
+                        <input type="radio"
+                               name="perfil_associado"
+                               value="{{ perfil.id }}"
+                               {% if perfil_associado and perfil_associado.id == perfil.id %}checked{% endif %}>
+                    </div>
+                    <div class="col-nome">
+                        {{ perfil.nome }}
+                    </div>
+                    <div class="col-descricao">
+                        {{ perfil.descricao|linebreaksbr }}
+                    </div>
+                </li>
+            {% empty %}
+                <li>Nenhum perfil cadastrado.</li>
             {% endfor %}
-        </select>
+        </ul>
 
-        <div class="cad-form-buttons">
+        <div class="cad-form-buttons" style="margin-top: 1.5rem;">
             <button type="submit" class="btn-small btn-wide">Salvar</button>
-            <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
             <button type="button" class="btn-small btn-wide btn-secondary"
+                    onclick="window.location.href='{% url "usuarios" %}'">
+                Limpar
+            </button>
+            <button type="button"
+                    class="btn-small btn-wide btn-secondary voltar-btn"
                     onclick="window.location.href='{% url 'home' %}'">
                 Voltar
             </button>
         </div>
     </form>
 
-    <hr>
-
-    <h2>Perfis disponíveis para associação</h2>
-    <ul class="cad-list">
-        <li class="cad-header">
-            <div>Nome</div>
-            <div>Descrição</div>
-        </li>
-        {% for perfil in perfis %}
-            <li class="cad-row">
-                <div class="col-nome">
-                    <strong>{{ perfil.nome }}</strong>
-                </div>
-                <div class="col-descricao">
-                    {{ perfil.descricao|linebreaksbr }}
-                </div>
-            </li>
-        {% empty %}
-            <li>Nenhum perfil cadastrado.</li>
-        {% endfor %}
-    </ul>
-
-    <p style="margin-top:1.5rem;">
-        <a href="{% url 'perfis_permissoes' %}" class="btn-small">
-            Ver detalhes de Perfis x Permissões
-        </a>
-    </p>
-
+    <p style="margin-top:1.5rem;"></p>
     <hr>
 
     <h2>Lista de Usuários cadastrados</h2>
@@ -862,17 +1058,20 @@ arquivo usuarios.html:
         <li class="cad-header">
             <div>Usuário</div>
             <div>E-mail</div>
-            <div class="col-acoes">Ações</div>
         </li>
         {% for usuario in usuarios %}
             <li class="cad-row">
-                <div class="col-nome">{{ usuario.username }}</div>
+                <div class="col-nome">
+                    <a href="?editar={{ usuario.id }}">{{ usuario.username }}</a>
+                </div>
                 <div class="col-descricao">{{ usuario.email }}</div>
                 <div class="col-acoes">
-                    <form method="post" style="display:inline-flex; gap:0.6rem; align-items:center;">
+                    <form method="post"
+                          action="{% url 'usuarios' %}"
+                          style="display:inline-flex; gap:0.6rem; align-items:center;">
                         {% csrf_token %}
-                        <input type="hidden" name="id" value="{{ usuario.id }}">
                         <input type="hidden" name="acao" value="excluir">
+                        <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
                         <a href="?editar={{ usuario.id }}" class="btn-small btn-wide">Editar</a>
                         <button type="submit" class="btn-small btn-wide btn-danger"
                                 onclick="return confirm('Confirma a exclusão deste usuário?');">
@@ -917,10 +1116,10 @@ body {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    height: 100%;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: hidden;
 }
 
 .conteiner {
@@ -928,19 +1127,20 @@ body {
     margin: 0 auto;
 }
 
+/*----------Header-----------*/
 .main-header-container {
     background: var(--color-primary-dark);
     width: 100%;
     box-sizing: border-box;
 }
-
+  
 .main-header {
     position: relative;
     display: flex;
     align-items: center;
     min-height: 80px;
 }
-
+  
 .main-logo-icon {
     position: absolute;
     left: 2rem;
@@ -948,31 +1148,47 @@ body {
     transform: translateY(-50%);
     height: 60px;
 }
-
+  
 .main-logo-text {
     width: 100%;
     text-align: center;
     font-size: 4rem;
-    color: var(--color-white);
+    color: #ffffff;
     font-family: var(--font-primary);
+    font-weight: bold;
+}
+  
+.main-header-user {
     position: absolute;
-    left: 0;
-    right: 0;
+    right: 2rem;
     top: 50%;
     transform: translateY(-50%);
+    color: #ffffff;
+    font-family: var(--font-primary);
+    font-weight: bold;
+    font-size: 1.8rem;
 }
-
-.main-content{
+  
+/* área central de todas as páginas */
+.main-content {
     flex: 1;
 }
 
-/* FORMULÁRIO DE LOGIN */
+/* -------- LOGIN -------- */
+
+/* fundo do login dentro de main-content */
 .body-login-bg {
+    width: 100%;
+    min-height: calc(100vh - 80px - 60px);  /* 80 header, ~40 footer (ajuste ao seu caso) */
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100%;
     background: #e0e0e0;
+}
+
+/* só quando o body tiver a classe login-page */
+body.login-page {
+    overflow: hidden; /* remove scroll no login, não afeta outras páginas */
 }
 
 .login-panel {
@@ -1005,14 +1221,42 @@ body {
     margin-bottom: 0.7rem;
 }
 
+/* -------- FORMULÁRIOS CADASTRO -------- */
+
+/* altura padronizada dos campos do formulário de cadastro */
+.cad-form input[type="text"],
+.cad-form input[type="password"],
+.cad-form input[type="email"],
+.cad-form textarea {
+    padding: 0.6rem 0.8rem;
+    font-size: 1.4rem;
+    border: 1px solid #999;
+    border-radius: 4px;
+    margin-top: 0.3rem;
+}
+
+/* larguras específicas — IDs usados no seu template */
+.cad-form #id_username,
+.cad-form #id_email,
+.cad-form #id_senha {
+    width: 100%;
+    max-width: none;
+}
+
+/* afasta campo senha dos botões */
+.cad-form #id_senha {
+    margin-bottom: 1.6rem;
+}
+
+/* inputs genéricos sem width fixa */
 .form-group input {
     padding: 0.8rem;
     font-size: 1.8rem;
     border: 2px solid #444;
     border-radius: 4px;
-    width: 100%;
 }
 
+/* botões do login */
 .form-actions {
     display: flex;
     gap: 1rem;
@@ -1051,38 +1295,34 @@ body {
     }
 }
 
-/* footer */
+/* -------- FOOTER -------- */
+
 .main-footer-container {
     background-color: #1f1f2e;
     color: #ffffff;
-    padding: 1.25rem 2rem;
+    padding: 0.6rem 2rem;
     font-size: 1.2rem;
+    margin-top: 0;
 }
-
+  
 .main-footer {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    min-height: 4rem;
+    width: 100%;
+    margin: 0;
 }
-
-.main-footer-address {
-    font-style: normal;
+  
+.main-footer-single-line {
+    white-space: nowrap;       /* força tudo na mesma linha */
+    text-align: center;        /* centraliza o texto todo */
 }
+  
+/* -------- MENU PRINCIPAL -------- */
 
-.main-footer-right {
-    opacity: 0.8;
-}
-
-/* menu principal */
-.main-menu-bar{
+.main-menu-bar {
     background-color: #008000;
     width: 100%;
 }
 
-.main-menu{
+.main-menu {
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
@@ -1091,8 +1331,8 @@ body {
     padding: 0.8rem 2rem;
 }
 
-/*itens menu principal */
-.main-menu-item{
+/* itens menu principal */
+.main-menu-item {
     color: #ffffff;
     text-decoration: none;
     font-size: 1.6rem;
@@ -1101,10 +1341,10 @@ body {
 }
 
 /* container com submenu */
-.has-submenu{
+.has-submenu {
     position: relative;
     color: #ffffff;
-    font: size 1.6rem;
+    font-size: 1.6rem;
     font-family: var(--font-primary);
     font-weight: 600;
     cursor: pointer;
@@ -1131,18 +1371,29 @@ body {
     font-size: 1.4rem;
 }
 
-.submenu a:hover{
+.submenu a:hover {
     background-color: #269fe6;
 }
 
-/* mostra o submenu ao passar o mouse em Segurança */
+/* mostra o submenu ao passar o mouse */
 .has-submenu:hover .submenu {
     display: block;
 }
 
-/* container geral das páginas de cadastro (perfis, permissoes, etc.) */
+/* -------- CONTAINERS CADASTRO -------- */
+
 .cad-container {
-    max-width: 800px;
+    max-width: 1000px;
+    margin: 2rem auto 1rem auto;
+    padding: 2.5rem;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
+}
+
+/* container específico permissões */
+.cad-container-permissoes {
+    max-width: 1100px;
     margin: 2rem auto;
     padding: 2rem 2.5rem;
     background: #ffffff;
@@ -1150,8 +1401,40 @@ body {
     box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
 }
 
-/* título */
-.cad-container h1 {
+/* painel mais largo para Perfis x Permissões */
+.cad-container-perfis-permissoes {
+    max-width: 1100px;
+    margin: 2rem auto;
+    padding: 2rem 2.5rem;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
+}
+
+.cad-container-perfis-permissoes label {
+    display: block;
+    margin-top: 1rem;
+    font-weight: bold;
+}
+
+.cad-container-perfis-permissoes select {
+    width: 100%;
+    max-width: 300px;
+    padding: 0.6rem 0.8rem;
+    font-size: 1.4rem;
+    border: 1px solid #999;
+    border-radius: 4px;
+    margin-top: 0.3rem;
+}
+
+.cad-container-perfis-permissoes .permissoes-list {
+    margin-top: 0.5rem;
+    margin-left: 1.5rem;
+}
+
+/* títulos containers */
+.cad-container h1,
+.cad-container-permissoes h1 {
     font-size: 2.4rem;
     margin-bottom: 1.5rem;
 }
@@ -1163,39 +1446,18 @@ body {
     font-weight: bold;
 }
 
-.cad-form input[type="text"],
-.cad-form textarea {
-    width: 100%;
-    padding: 0.6rem 0.8rem;
-    font-size: 1.4rem;
-    border: 1px solid #999;
-    border-radius: 4px;
-    margin-top: 0.3rem;
-}
-
-.cad-form textarea {
-    min-height: 6rem;
-    resize: vertical;
-}
-
-/* contêiner dos botões principais (Salvar / Limpar / Voltar) */
-.cad-form-buttons {
-    display: inline-flex;
-    gap: 0.8rem;
-    margin-top: 1.2rem;
-}
-
-/* lista em forma de colunas (Nome | Descrição | Ações) */
+/* lista em forma de colunas */
 .cad-list {
     list-style: none;
     margin-top: 2rem;
     padding: 0;
 }
 
+/* colunas: Selecionar | Nome | Descrição */
 .cad-header,
 .cad-row {
     display: grid;
-    grid-template-columns: 20% 60% 20%;
+    grid-template-columns: 20% 20% 60%;
     align-items: center;
     gap: 0.5rem;
     padding: 0.3rem 0;
@@ -1211,14 +1473,18 @@ body {
     border-bottom: 1px solid #eee;
 }
 
-/* colunas de texto alinhadas à altura dos botões */
+/* colunas de texto */
 .col-nome,
 .col-descricao {
     display: flex;
     align-items: center;
 }
 
-/* coluna de ações: botões lado a lado e centralizados verticalmente */
+.cad-row .col-nome {
+    font-weight: normal;
+}
+
+/* coluna de ações */
 .col-acoes {
     display: flex;
     justify-content: flex-end;
@@ -1227,7 +1493,24 @@ body {
     text-align: right;
 }
 
-/* botões reutilizáveis (já servem para perfis e permissoes) */
+.cad-list-permissoes .cad-header,
+.cad-list-permissoes .cad-row {
+    grid-template-columns: 30% 55% 15%;
+}
+
+.col-nome-permissoes {
+    font-weight: normal;
+}
+
+/* radios/checkboxes centralizados na coluna Selecionar */
+.cad-list-perfis-usuarios .col-selecionar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* -------- BOTÕES -------- */
+
 .btn-small {
     display: inline-block;
     padding: 0.4rem 0.9rem;
@@ -1258,93 +1541,145 @@ body {
 .form-actions button:hover {
     filter: brightness(1.05);
 }
-/* --- ajustes específicos da tela de Permissões --- */
 
-/* painel um pouco mais largo em Permissões */
-.cad-container-permissoes {
-    max-width: 1100px;
-    margin: 2rem auto;
-    padding: 2rem 2.5rem;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
-}
+/* -------- LISTA DE PERMISSÕES NO PERFIL -------- */
 
-/* colunas de Permissões mais largas (Nome: 25%, Descrição: 60%, Ações: 15%) */
-.cad-list-permissoes .cad-header,
-.cad-list-permissoes .cad-row {
-    grid-template-columns: 30% 55% 15%;
-}
-
-/* remover negrito do conteúdo da coluna Nome em Permissões */
-.col-nome-permissoes {
-    font-weight: normal;
-}
-
-/* opcional: manter o título grande em permissões */
-.cad-container-permissoes h1 {
-    font-size: 2.4rem;
-    margin-bottom: 1.5rem;
-}
-
-/* painel mais largo para Perfis x Permissões */
-.cad-container-perfis-permissoes {
-    max-width: 1100px;
-    margin: 2rem auto;
-    padding: 2rem 2.5rem;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
-  }
-  
-  /* ajustar labels e campos em perfis_permissoes */
-.cad-container-perfis-permissoes label {
-    display: block;
-    margin-top: 1rem;
-    font-weight: bold;
-  }
-  
-  .cad-container-perfis-permissoes select {
-    width: 100%;
-    max-width: 300px;
-    padding: 0.6rem 0.8rem;
-    font-size: 1.4rem;
-    border: 1px solid #999;
-    border-radius: 4px;
-    margin-top: 0.3rem;
-  }
-  
-  /* lista de checkboxes com um pouco de recuo */
-  .cad-container-perfis-permissoes .permissoes-list {
-    margin-top: 0.5rem;
-    margin-left: 1.5rem;
-  }
-
- /* lista de permissões na tela de Perfis x Permissões */
 .permissoes-list {
-    list-style: none;          /* remove marcadores */
+    list-style: none;
     margin: 1rem 0 0 0;
     padding: 0;
     border-top: 1px solid #eee;
-  }
-  
-  .permissoes-list-item {
+}
+
+.permissoes-list-item {
     display: flex;
     align-items: center;
     padding: 0.4rem 0;
-    border-bottom: 1px solid #eee;  /* linha entre itens */
-  }
-  
-  .permissoes-list-item input[type="checkbox"] {
-    margin-right: 0.6rem;
-  }
-
-  cad-container-usuarios {
-    max-width: 900px;
-    margin: 2rem auto;
-    padding: 2rem 2.5rem;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 0 12px rgba(0, 0, 0, 0.10);
+    border-bottom: 1px solid #eee;
 }
-  
+
+.permissoes-list-item input[type="checkbox"] {
+    margin-right: 0.6rem;
+}
+
+/* -------- USUÁRIOS: LINHA COM ATIVO -------- */
+
+.cad-form-row-usuarios {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.5fr 0.5fr;
+    column-gap: 1.5rem;
+    margin-bottom: 0.7rem;
+}
+
+.cad-form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+/* label + checkbox alinhados como os outros campos */
+.cad-form-group-ativo label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+.cad-form-group input {
+    width: 100%;
+}
+
+.cad-form-group-ativo input[type="checkbox"] {
+    margin-top: 0.6rem;
+    align-self: flex-start;
+}
+
+.menu-disabled {
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.btn-disabled {
+    pointer-events: none;
+    opacity: 0.4;
+}
+
+/* -------- PERFIS / PERMISSÕES: NOME 1/3 + DESCRIÇÃO 2/3 -------- */
+
+.cad-form-row-dupla {
+    display: grid;
+    grid-template-columns: 1fr 2fr;  /* Nome 1/3, Descrição 2/3 */
+    column-gap: 4mm;                /* afastar campos dos botões (horizontal) */
+    align-items: flex-start;
+    margin-top: 1rem;
+}
+
+/* grupo dos campos dentro da linha dupla */
+.cad-form-row-dupla .cad-form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+/* bloco específico dos botões Salvar / Limpar / Voltar, se usado na mesma linha */
+.cad-form-actions {
+    display: flex;
+    gap: 4mm;            /* espaço entre os botões */
+    margin-left: 4mm;    /* afastar botões do campo Descrição */
+    margin-bottom: 4mm;  /* afastar os botões da linha/tabela abaixo (vertical) */
+}
+
+/* mesma altura de Nome para o campo Descrição */
+.cad-form-group-descricao textarea {
+    width: 100%;
+    height: 32px;          /* ajuste fino se precisar */
+    min-height: 32px;
+    max-height: 32px;
+    resize: none;          /* impede redimensionar e manter mesma altura */
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+}
+
+/* PERFIL: afasta campos dos botões e botões da tabela */
+
+/* afasta os inputs de texto da linha logo abaixo (botões) em 4mm */
+.cad-form input[type="text"] {
+    margin-bottom: 4mm;
+}
+
+/* afasta a linha de botões da tabela/lista abaixo em 4mm */
+.cad-form button,
+.cad-form .btn-small {
+    margin-bottom: 4mm;
+}
+
+/* mantém um pequeno espaçamento horizontal entre os botões */
+.cad-form button + button,
+.cad-form .btn-small + .btn-small {
+    margin-left: 4mm;
+}
+
+/* PERMISSÕES: afastar campos dos botões e botões da lista */
+
+/* 4mm entre o campo descrição e a linha dos botões */
+.cad-form textarea#descricao {
+    margin-bottom: 4mm;
+}
+
+/* linha de botões do formulário de permissões */
+.cad-form-buttons {
+    display: flex;
+    gap: 4mm;          /* espaço horizontal entre Salvar / Limpar / Voltar */
+    margin-top: 0;     /* garante que não some espaço indesejado acima */
+    margin-bottom: 4mm;/* 4mm entre os botões e o <hr>/lista de permissões */
+}
+
+.cad-form input#nome {
+    margin-bottom: 4mm;
+}
+
+/* em telas pequenas, empilha os campos */
+@media (max-width: 800px) {
+    .cad-form-row-dupla {
+        grid-template-columns: 1fr;
+    }
+}

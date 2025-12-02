@@ -7,7 +7,11 @@
 </head>
 
 <body class="{% block body_class %}{% endblock body_class %}">
+    {% if request.path == '/login/' %}
     {% include "c1SuiteApp/partials/header.html" %}
+    {% else %}
+    {% include "c1SuiteApp/partials/header_logged.html" %}
+    {% endif %}
 
     <main class="main-content">
         {% block content %}{% endblock content %}
@@ -18,6 +22,42 @@
             {% include "c1SuiteApp/partials/footer.html" %}
         </div>
     </footer>
+
+    <script>
+        // Não aplicar na tela de login
+        if (!document.body.classList.contains('login-page')) {
+
+            // Se não existir token na sessionStorage, significa que
+            // esta aba/navegador foi aberta "do zero" -> força logout
+            if (!sessionStorage.getItem('c1_aberta')) {
+                sessionStorage.setItem('c1_aberta', '1');
+                window.location.href = "{% url 'logout' %}";
+            }
+
+            let confirmarSaida = true;
+
+            // Qualquer navegação interna/mudança via link ou botão desativa logout automático
+            document.querySelectorAll('a, button').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    confirmarSaida = false;
+                });
+            });
+
+            // Logout normal pelo menu
+            document.querySelectorAll('a[href*="logout"]').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    confirmarSaida = false;
+                });
+            });
+
+            // Sem popup: se o usuário sair "bruscamente", envia logout
+            window.addEventListener('unload', function () {
+                if (confirmarSaida) {
+                    navigator.sendBeacon("{% url 'logout' %}");
+                }
+            });
+        }
+    </script>
 </body>
 
 </html>

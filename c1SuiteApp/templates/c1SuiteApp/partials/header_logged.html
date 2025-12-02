@@ -1,11 +1,15 @@
 {% load static %}
 <header class="main-header-container">
-    <div class="main-header conteiner">
+    <div class="main-header">
         <img src="{% static 'c1SuiteApp/img/logo.jpeg' %}"
              alt="Logo"
              class="main-logo-icon">
 
         <div class="main-logo-text">Helius</div>
+
+        <div class="main-header-user">
+            Usuário: {{ request.user.username }}
+        </div>
     </div>
 </header>
 
