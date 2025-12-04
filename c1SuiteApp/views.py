@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
-from .models import Perfil, Permissao, Usuario
+from .models import Perfil, Permissao, Usuario, ParceiroTipo
 from .forms import LoginForm, UsuarioForm
 from django.urls import reverse       
 from django.contrib import messages   
+from django.db import IntegrityError
 
 # Create your views here.
 def login_view(request):
@@ -89,8 +90,7 @@ def permissoes_view(request):
 
     # ----- CREATE / UPDATE -----
     if request.method == "POST" and request.POST.get("acao") == "salvar":
-        # Regra que você definiu:
-        # se o perfil tiver PERFIS_SUB_SALVAR, ele pode incluir N novas permissões
+        # se o perfil tiver PERFIS_SUB_SALVAR, ele pode incluir/alterar permissões
         if "PERFIS_SUB_SALVAR" not in permissoes_nomes:
             return redirect("permissoes")
 
@@ -102,22 +102,18 @@ def permissoes_view(request):
         if not permissoes_id:
             Permissao.objects.create(nome=nome, descricao=descricao)
         else:
-            # atualização de permissão já existente (opcionalmente controlada por outra permissão)
-            # se quiser controlar edição desta tela, crie PERMISSOES_SUB_EDITAR e use aqui
+            # atualização de permissão já existente
             permissao = get_object_or_404(Permissao, id=permissoes_id)
             permissao.nome = nome
             permissao.descricao = descricao
             permissao.save()
 
+        # Sempre redireciona SEM contexto de edição (form volta vazio)
         return redirect("permissoes")
 
     # ----- DELETE -----
     if request.method == "POST" and request.POST.get("acao") == "excluir":
-        # Se quiser controlar exclusão da tela de permissões, crie PERMISSOES_SUB_EXCLUIR
-        # e teste aqui. Por enquanto, vamos deixar sem travar:
-        # if "PERMISSOES_SUB_EXCLUIR" not in permissoes_nomes:
-        #     return redirect("permissoes")
-
+        # Se quiser controlar exclusão, coloque checagem de permissão aqui
         permissoes_id = request.POST.get("id")
         permissao = get_object_or_404(Permissao, id=permissoes_id)
         permissao.delete()
@@ -127,14 +123,15 @@ def permissoes_view(request):
     permissao_editar = None
     permissoes_id = request.GET.get("editar")
     if permissoes_id:
-        # se quiser controlar quem pode carregar para edição, crie PERMISSOES_SUB_EDITAR
-        # e teste aqui; por enquanto sempre permite:
+        # Se quiser, condicione aqui a uma permissão de edição
         permissao_editar = get_object_or_404(Permissao, id=permissoes_id)
 
+    # Lista para a tabela
     permissoes = Permissao.objects.all().order_by("nome")
+
     return render(
         request,
-        "c1SuiteApp/pages/permissoes.html",
+        "c1SuiteApp/pages/permissoes.html",  # mantém o caminho que funciona no seu projeto
         {
             "permissoes": permissoes,
             "permissoes_editar": permissao_editar,
@@ -146,9 +143,16 @@ def usuarios_view(request):
     usuarios = Usuario.objects.all()
     perfis = Perfil.objects.all().order_by("nome")
 
+    # permissões do usuário logado (se estiver usando no template)
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
     editar_id = request.GET.get("editar")
 
-    # ---------- MODO EDIÇÃO / NOVO ----------
     if editar_id:
         usuario_editar = get_object_or_404(Usuario, pk=editar_id)
         username_inicial = usuario_editar.username
@@ -178,6 +182,7 @@ def usuarios_view(request):
                 messages.error(request, "ID de usuário inválido para exclusão.")
                 return redirect(reverse("usuarios"))
 
+            # aqui pode validar permissão: "USUARIO_SUB_EXCLUIR" in permissoes_nomes
             usuario_del.delete()
             messages.success(request, "Usuário excluído com sucesso.")
             return redirect(reverse("usuarios"))
@@ -194,8 +199,10 @@ def usuarios_view(request):
         elif not perfil_id:
             messages.error(request, "Selecione um perfil para o usuário.")
         else:
-            if usuario_editar:
-                usuario = usuario_editar
+            usuario_id_form = request.POST.get("usuario_id")
+
+            if usuario_id_form:
+                usuario = get_object_or_404(Usuario, pk=int(usuario_id_form))
             else:
                 usuario = Usuario()
 
@@ -203,11 +210,14 @@ def usuarios_view(request):
             usuario.email = email
             usuario.set_password(senha)
             usuario.ativo = ativo
-            usuario.perfil_id = perfil_id  # FK única
-            usuario.save()
+            usuario.perfil_id = perfil_id
 
-            messages.success(request, "Usuário salvo com sucesso.")
-            return redirect(reverse("usuarios"))
+            try:
+                usuario.save()
+                messages.success(request, "Usuário salvo com sucesso.")
+                return redirect(reverse("usuarios"))
+            except IntegrityError:
+                messages.error(request, "Já existe um usuário com esse login.")
 
     # ---------- RENDERIZAÇÃO ----------
     return render(
@@ -220,6 +230,7 @@ def usuarios_view(request):
             "username_inicial": username_inicial,
             "email_inicial": email_inicial,
             "perfil_associado": perfil_associado,
+            "permissoes_nomes": permissoes_nomes,
         },
     )
 
@@ -242,12 +253,21 @@ def perfis_permissoes_view(request):
     perfis = Perfil.objects.all().order_by('nome')
     permissoes = Permissao.objects.all().order_by('nome')
 
+    # permissões do perfil do usuário logado
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
     if not perfis:
         return render(request, 'c1SuiteApp/pages/perfis_permissoes.html', {
             'perfis': [],
             'permissoes': permissoes,
             'perfil_selecionado': None,
             'permissoes_do_perfil': [],
+            'permissoes_nomes': permissoes_nomes,
         })
 
     # --- SALVAR (POST) ---
@@ -265,16 +285,72 @@ def perfis_permissoes_view(request):
     perfil_id = request.GET.get('perfil') or perfis[0].id
     perfil_selecionado = get_object_or_404(Perfil, id=perfil_id)
 
-    # busca na tabela perfis_permissoes (ManyToMany) as permissões já vinculadas
+    # permissões já vinculadas ao perfil selecionado
     permissoes_do_perfil = set(
         perfil_selecionado.permissoes.values_list('id', flat=True)
     )
-    # agora permissoes_do_perfil é um conjunto de IDs inteiros do perfil
 
     context = {
         'perfis': perfis,
         'permissoes': permissoes,
         'perfil_selecionado': perfil_selecionado,
         'permissoes_do_perfil': permissoes_do_perfil,
+        'permissoes_nomes': permissoes_nomes,  # usado no template para habilitar o botão
     }
     return render(request, 'c1SuiteApp/pages/perfis_permissoes.html', context)
+
+#------------------ views cadastros
+
+def parceiros_tipo_view(request):
+    # ----- PERMISSÕES DO PERFIL DO USUÁRIO LOGADO -----
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
+    # ----- CREATE / UPDATE -----
+    if request.method == "POST" and request.POST.get("acao") == "salvar":
+        if "CAD_PAR_TIPO_SUB_SALVAR" not in permissoes_nomes:
+            return redirect("tipos_parceiros")
+
+        tipo_id = request.POST.get("id")
+        descricao = request.POST.get("descricao", "").strip()
+
+        if tipo_id:  # atualização
+            tipo = get_object_or_404(ParceiroTipo, id_tipopar=tipo_id)
+            tipo.descricao = descricao
+            tipo.save()
+        else:        # inclusão
+            ParceiroTipo.objects.create(descricao=descricao)
+
+        return redirect("tipos_parceiros")
+
+    # ----- DELETE -----
+    if request.method == "POST" and request.POST.get("acao") == "excluir":
+        if "CAD_PAR_TIPO_SUB_EXCLUIR" not in permissoes_nomes:
+            return redirect("tipos_parceiros")
+
+        tipo_id = request.POST.get("id")
+        tipo = get_object_or_404(ParceiroTipo, id_tipopar=tipo_id)
+        tipo.delete()
+        return redirect("tipos_parceiros")
+
+    # ----- EDIT (carregar dados no form) -----
+    tipo_editar = None
+    tipo_id = request.GET.get("editar")
+    if tipo_id and "CAD_PAR_TIPO_SUB_EDITAR" in permissoes_nomes:
+        tipo_editar = get_object_or_404(ParceiroTipo, id_tipopar=tipo_id)
+
+    tipos = ParceiroTipo.objects.all().order_by("descricao")
+
+    return render(
+        request,
+        "c1SuiteApp/pages/parceiros_tipo.html",
+        {
+            "tipos": tipos,
+            "tipo_editar": tipo_editar,
+            "permissoes_nomes": permissoes_nomes,
+        },
+    )

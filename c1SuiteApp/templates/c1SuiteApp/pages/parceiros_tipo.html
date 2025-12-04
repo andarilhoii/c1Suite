@@ -1,49 +1,42 @@
 {% extends "base.html" %}
-{% block title %} Helius - Perfis {% endblock title%}
+{% block title %}Helius - Tipo de Parceiro{% endblock title %}
 
 {% block content %}
 <div class="cad-container">
 
-    <h1>Lista de Perfis</h1>
+    <h1>Lista de Tipos de Parceiros</h1>
 
-    <!-- Formulário para criar/editar perfil -->
+    <!-- Formulário para criar/editar tipo de parceiro -->
     <form method="POST" class="cad-form">
         {% csrf_token %}
 
         <!-- id oculto para edição -->
-        <input type="hidden" name="id" value="{{ perfil_editar.id|default_if_none:'' }}">
+        <input type="hidden" name="id" value="{{ tipo_editar.id_tipopar|default_if_none:'' }}">
         <!-- informa à view que esta requisição é de salvar (create/update) -->
         <input type="hidden" name="acao" value="salvar">
 
-        <!-- Linha com Nome e Descrição lado a lado -->
         <div class="cad-form-row-dupla">
-            <div class="cad-form-group cad-form-group-nome">
-                <label for="nome">Nome:</label>
-                <input type="text"
-                       name="nome"
-                       id="nome"
-                       value="{{ perfil_editar.nome|default_if_none:'' }}"
-                       required>
-            </div>
-
             <div class="cad-form-group cad-form-group-descricao">
                 <label for="descricao">Descrição:</label>
-                <textarea name="descricao"
-                          id="descricao">{{ perfil_editar.descricao|default_if_none:'' }}</textarea>
+                <input type="text"
+                       name="descricao"
+                       id="descricao"
+                       value="{{ tipo_editar.descricao|default_if_none:'' }}"
+                       maxlength="30"
+                       required>
             </div>
         </div>
 
         <!-- botões principais do formulário -->
         <div class="cad-form-buttons">
             <!-- SALVAR -->
-            {% if "PERFIS_SUB_SALVAR" in permissoes_nomes %}
+            {% if "CAD_PAR_TIPO_SUB_SALVAR" in permissoes_nomes %}
                 <button type="submit" class="btn-small btn-wide">Salvar</button>
             {% else %}
-                <!-- não envia POST -->
                 <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
             {% endif %}
 
-            <button type="button" class="btn-small btn-wide btn-secondary" onclick="limparPermissao()">Limpar</button>
+            <button type="button" class="btn-small btn-wide btn-secondary" onclick="limparTipoParceiro()">Limpar</button>
 
             <button type="button"
                     class="btn-small btn-wide btn-secondary voltar-btn"
@@ -54,47 +47,41 @@
     </form>
     <hr>
 
-    <!-- Listagem dos perfis -->
+    <!-- Listagem dos tipos de parceiros -->
     <ul class="cad-list">
         <li class="cad-header">
-            <div>Nome</div>
             <div>Descrição</div>
+            <div>Ações</div>
         </li>
 
-        {% for perfil in perfis %}
+        {% for tipo in tipos %}
             <li class="cad-row">
-                <div class="col-nome">
-                    <strong>{{ perfil.nome }}</strong>
-                </div>
-
                 <div class="col-descricao">
-                    {{ perfil.descricao|linebreaksbr }}
+                    <strong>{{ tipo.descricao }}</strong>
                 </div>
 
                 <div class="col-acoes">
                     <form method="post" style="display:inline-flex; gap: 0.6rem; align-items: center;">
                         {% csrf_token %}
-                        <input type="hidden" name="id" value="{{ perfil.id }}">
+                        <input type="hidden" name="id" value="{{ tipo.id_tipopar }}">
                         <input type="hidden" name="acao" value="excluir">
 
                         <!-- EDITAR -->
-                        {% if "PERFIS_SUB_EDITAR" in permissoes_nomes %}
-                            <a href="?editar={{ perfil.id }}" class="btn-small btn-wide">Editar</a>
+                        {% if "CAD_PAR_TIPO_SUB_EDITAR" in permissoes_nomes %}
+                            <a href="?editar={{ tipo.id_tipopar }}" class="btn-small btn-wide">Editar</a>
                         {% else %}
-                            <!-- sem ?editar, não carrega modo edição -->
                             <a href="#" class="btn-small btn-wide btn-disabled"
                                tabindex="-1" aria-disabled="true">Editar</a>
                         {% endif %}
 
                         <!-- EXCLUIR -->
-                        {% if "PERFIS_SUB_EXCLUIR" in permissoes_nomes %}
+                        {% if "CAD_PAR_TIPO_SUB_EXCLUIR" in permissoes_nomes %}
                             <button type="submit"
                                     class="btn-small btn-wide btn-danger"
-                                    onclick="return confirm('Confirma a exclusão deste perfil?');">
+                                    onclick="return confirm('Confirma a exclusão deste tipo de parceiro?');">
                                 Excluir
                             </button>
                         {% else %}
-                            <!-- type="button" para não enviar POST -->
                             <button type="button"
                                     class="btn-small btn-wide btn-danger btn-disabled"
                                     tabindex="-1" aria-disabled="true">
@@ -105,20 +92,19 @@
                 </div>
             </li>
         {% empty %}
-            <li>Nenhum perfil cadastrado.</li>
+            <li>Nenhum tipo de parceiro cadastrado.</li>
         {% endfor %}
     </ul>
 </div>
-<!-- javascript para limpar os campos na pagina html -->
+
 <script>
-    function limparPermissao() {
-        document.getElementById('nome').value = '';
+    function limparTipoParceiro() {
         document.getElementById('descricao').value = '';
-        // se quiser, zera também o hidden id para voltar ao modo inclusão
         const idField = document.querySelector('input[name="id"]');
         if (idField) idField.value = '';
     }
-    </script>   
+</script>
 {% endblock content %}
+
 
 

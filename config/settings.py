@@ -115,7 +115,7 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # cookie morre ao fechar o browser [web:
 
 # Tempo máximo de vida da sessão (em segundos).
 # Exemplo: 3600 = 1 hora. Ajuste conforme necessidade.
-SESSION_COOKIE_AGE = 60  # padrão seria 1209600 (2 semanas) [web:7][web:16]
+SESSION_COOKIE_AGE = 360  # padrão seria 1209600 (2 semanas) [web:7][web:16]
 
 # Opcional: renovar o vencimento a cada request autenticado
 # Mantém o usuário logado enquanto houver atividade dentro da janela de SESSION_COOKIE_AGE

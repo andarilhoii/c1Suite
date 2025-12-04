@@ -9,6 +9,7 @@ from .views import (
     usuarios_view,
     principal_view,
     perfis_permissoes_view,
+    parceiros_tipo_view,
 )
 
 urlpatterns = [
@@ -18,10 +19,7 @@ urlpatterns = [
     path("perfis/", login_required(perfis_view), name="perfis"),
     path("permissoes/", login_required(permissoes_view), name="permissoes"),
     path("usuarios/", login_required(usuarios_view), name="usuarios"),
-    path(
-        "perfis-permissoes/",
-        login_required(perfis_permissoes_view),
-        name="perfis_permissoes",
-    ),
+    path("perfis-permissoes/",login_required(perfis_permissoes_view), name="perfis_permissoes",),
+    path("tipos-parceiros/",parceiros_tipo_view, name='tipos_parceiros'),
 ]
 

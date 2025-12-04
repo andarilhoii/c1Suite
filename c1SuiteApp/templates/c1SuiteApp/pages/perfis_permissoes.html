@@ -37,7 +37,12 @@
                 {% endif %}
             {% endfor %}
         </ul>
-        <button type="submit" class="btn-small btn-wide">Salvar</button>
+        {% if "PER_PERM_SUB_INCLUIR" in permissoes_nomes %}
+            <button type="submit" class="btn-small btn-wide">Salvar</button>
+        {% else %}
+            <button type="submit" class="btn-small btn-wide btn-disabled">Salvar</button>
+        {% endif %}
+        
         <button type="button" class="btn-small btn-wide btn-secondary voltar-btn"
                 onclick="window.location.href='{% url 'home' %}'">
             Voltar

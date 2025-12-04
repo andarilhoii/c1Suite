@@ -1,7 +1,6 @@
 {% extends "base.html" %}
-<!-- bloco que permite alterar o título desta pagina -->
-{% block title %} Helius - Home {% endblock title%}
-{% block content %} 
+{% block title %}Helius - Home{% endblock title %}
+{% block content %}
 <div class="main-menu-bar">
     <nav class="main-menu">
         <!-- MENU SEGURANÇA -->
@@ -10,44 +9,58 @@
         {% else %}
             <div class="main-menu-item has-submenu menu-disabled">
         {% endif %}
-            <span>Segurança</span>
-            <div class="submenu">
-                <!-- Submenu Perfis -->
-                {% if "ACESSO_PERFIS" in permissoes_nomes %}
-                    <a href="{% url 'perfis' %}">Perfis</a>
-                {% else %}
-                    <a href="#" class="menu-disabled">Perfis</a>
-                {% endif %}
+                <span>Segurança</span>
+                <div class="submenu">
+                    <!-- Submenu Perfis -->
+                    {% if "ACESSO_PERFIS" in permissoes_nomes %}
+                        <a href="{% url 'perfis' %}">Perfis</a>
+                    {% else %}
+                        <a href="#" class="menu-disabled">Perfis</a>
+                    {% endif %}
 
-                <!-- Submenu Permissões -->
-                {% if "ACESSO_PERMISSOES" in permissoes_nomes %}
-                    <a href="{% url 'permissoes' %}">Permissões</a>
-                {% else %}
-                    <a href="#" class="menu-disabled">Permissões</a>
-                {% endif %}
+                    <!-- Submenu Permissões -->
+                    {% if "ACESSO_PERMISSOES" in permissoes_nomes %}
+                        <a href="{% url 'permissoes' %}">Permissões</a>
+                    {% else %}
+                        <a href="#" class="menu-disabled">Permissões</a>
+                    {% endif %}
 
-                <!-- Submenu Perfis x Permissões -->
-                {% if "ACESSO_PERFIS_PERMISSOES" in permissoes_nomes %}
-                    <a href="{% url 'perfis_permissoes' %}">Perfis Permissões</a>
-                {% else %}
-                    <a href="#" class="menu-disabled">Perfis Permissões</a>
-                {% endif %}
+                    <!-- Submenu Perfis x Permissões -->
+                    {% if "ACESSO_PERFIS_PERMISSOES" in permissoes_nomes %}
+                        <a href="{% url 'perfis_permissoes' %}">Perfis Permissões</a>
+                    {% else %}
+                        <a href="#" class="menu-disabled">Perfis Permissões</a>
+                    {% endif %}
 
-                <!-- Submenu Usuários -->
-                {% if "ACESSO_USUARIOS" in permissoes_nomes %}
-                    <a href="{% url 'usuarios' %}">Usuários</a>
-                {% else %}
-                    <a href="#" class="menu-disabled">Usuários</a>
-                {% endif %}
-
-                <a href="#" class="menu-disabled">Grupos Usuários</a>
-                <a href="#" class="menu-disabled">Permissões Usuários</a>
+                    <!-- Submenu Usuários -->
+                    {% if "ACESSO_USUARIOS" in permissoes_nomes %}
+                        <a href="{% url 'usuarios' %}">Usuários</a>
+                    {% else %}
+                        <a href="#" class="menu-disabled">Usuários</a>
+                    {% endif %}
+                </div>
             </div>
-        </div>
 
-        <!-- demais itens de menu principal: Cadastrados, Operações, etc.
-          você pode criar permissões específicas para eles também -->
-        <a href="#" class="main-menu-item menu-disabled">Cadastrados</a>
+        <!-- MENU CADASTROS -->
+        {% if "ACESSO_CADASTROS" in permissoes_nomes %}
+            <div class="main-menu-item has-submenu">
+                <span>Cadastros</span>
+                <div class="submenu">
+                    <!-- SUBMENU TIPO PARCEIROS-->
+                    {% if "ACESSO_TIPO_PARCEIROS" in permissoes_nomes %}
+                        <a href="{% url 'tipos_parceiros' %}">Tipos de Parceiros</a>
+                    {% else %}
+                        <a href="#" class="menu-disabled">Tipos de Parceiros</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <div class="main-menu-item has-submenu menu-disabled">
+                <span>Cadastros</span>
+            </div>
+        {% endif %}
+
+        <!-- demais itens de menu principal -->
         <a href="#" class="main-menu-item menu-disabled">Operações</a>
         <a href="#" class="main-menu-item menu-disabled">Configurações</a>
         <a href="#" class="main-menu-item menu-disabled">Sobre</a>
@@ -59,6 +72,6 @@
 <!--
 <div class="principal-content">
     Principal
-</div
+</div>
 -->
-{% endblock content %}  
+{% endblock content %}

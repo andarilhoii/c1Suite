@@ -33,13 +33,14 @@
     
         <!-- botões abaixo, com espaçamento -->
         <div class="cad-form-buttons">
-            {% if "PERFIS_SUB_SALVAR" in permissoes_nomes %}
+            {% if "PERMIS_SUB_SALVAR" in permissoes_nomes %}
                 <button type="submit" class="btn-small btn-wide">Salvar</button>
             {% else %}
                 <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
             {% endif %}
     
-            <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
+            <button type="button" class="btn-small btn-wide btn-secondary" onclick="limparPermissao()">Limpar</button>
+
     
             <button type="button"
                     class="btn-small btn-wide btn-secondary voltar-btn"
@@ -78,14 +79,14 @@
                         <input type="hidden" name="id" value="{{ permissao.id }}">
                         <input type="hidden" name="acao" value="excluir">
                 
-                        {% if "PERFIS_SUB_EDITAR" in permissoes_nomes %}
+                        {% if "PERMIS_SUB_EDITAR" in permissoes_nomes %}
                             <a href="?editar={{ permissao.id }}" class="btn-small btn-wide">Editar</a>
                         {% else %}
                             <a href="#" class="btn-small btn-wide btn-disabled"
                                tabindex="-1" aria-disabled="true">Editar</a>
                         {% endif %}
                 
-                        {% if "PERFIS_SUB_EXCLUIR" in permissoes_nomes %}
+                        {% if "PERMIS_SUB_EXCLUIR" in permissoes_nomes %}
                             <button type="submit"
                                     class="btn-small btn-wide btn-danger"
                                     onclick="return confirm('Confirma a exclusão desta permissão?');">
@@ -106,6 +107,16 @@
         {% endfor %}
     </ul>
 </div>
+
+<!-- javascript para que o botão lime os campos do formulário -->
+<script>
+    function limparPermissao() {
+        document.getElementById('nome').value = '';
+        document.getElementById('descricao').value = '';
+        // se quiser, zera também o hidden id para voltar ao modo inclusão
+        const idField = document.querySelector('input[name="id"]');
+        if (idField) idField.value = '';
+    }
+</script>    
+
 {% endblock content %}
-
-

@@ -9,6 +9,9 @@
     <form method="POST" class="cad-form" action="{% url 'usuarios' %}">
         {% csrf_token %}
         <input type="hidden" name="acao" value="salvar">
+        {% if usuario_editar %}
+            <input type="hidden" name="usuario_id" value="{{ usuario_editar.id }}">
+        {% endif %}
 
         <!-- Linha com Usuário | Senha | E-mail | Ativo -->
         <div class="cad-form-row-usuarios">
@@ -70,16 +73,15 @@
         </ul>
 
         <div class="cad-form-buttons" style="margin-top: 1.5rem;">
-            <button type="submit" class="btn-small btn-wide">Salvar</button>
-            <button type="button" class="btn-small btn-wide btn-secondary"
-                    onclick="window.location.href='{% url "usuarios" %}'">
-                Limpar
-            </button>
-            <button type="button"
-                    class="btn-small btn-wide btn-secondary voltar-btn"
-                    onclick="window.location.href='{% url 'home' %}'">
-                Voltar
-            </button>
+            {% if "USUARIO_SUB_SALVAR" in permissoes_nomes %}
+                <button type="submit" class="btn-small btn-wide">Salvar</button>
+            {% else %}
+                <button type="submit" class="btn-small btn-wide btn-disabled">Salvar</button>
+            {% endif %}
+
+            <button type="button" class="btn-small btn-wide btn-secondary" onclick="window.location.href='{% url "usuarios" %}'">Limpar</button>
+
+            <button type="button" class="btn-small btn-wide btn-secondary voltar-btn" onclick="window.location.href='{% url 'home' %}'">Voltar</button>
         </div>
     </form>
 
@@ -105,11 +107,17 @@
                         {% csrf_token %}
                         <input type="hidden" name="acao" value="excluir">
                         <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
-                        <a href="?editar={{ usuario.id }}" class="btn-small btn-wide">Editar</a>
-                        <button type="submit" class="btn-small btn-wide btn-danger"
-                                onclick="return confirm('Confirma a exclusão deste usuário?');">
-                            Excluir
-                        </button>
+                        {% if "USUARIO_SUB_EDITAR" in permissoes_nomes %}
+                            <a href="?editar={{ usuario.id }}" class="btn-small btn-wide">Editar</a>
+                        {% else %}
+                            <a href="?editar={{ usuario.id }}" class="btn-small btn-wide btn-disabled">Editar</a>
+                        {% endif %}
+
+                        {% if "USUARIO_SUB_EXCLUIR" in permissoes_nomes %}
+                            <button type="submit" class="btn-small btn-wide btn-danger" onclick="return confirm('Confirma a exclusão deste usuário?');">Excluir</button>
+                        {% else %}
+                            <button type="submit" class="btn-small btn-wide btn-danger btn-disabled" onclick="return confirm('Confirma a exclusão deste usuário?');">Excluir</button>
+                        {% endif %}                        
                     </form>
                 </div>
             </li>

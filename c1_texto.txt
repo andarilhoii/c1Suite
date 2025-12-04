@@ -237,6 +237,7 @@ from .models import Perfil, Permissao, Usuario
 from .forms import LoginForm, UsuarioForm
 from django.urls import reverse       
 from django.contrib import messages   
+from django.db import IntegrityError
 
 # Create your views here.
 def login_view(request):
@@ -322,8 +323,7 @@ def permissoes_view(request):
 
     # ----- CREATE / UPDATE -----
     if request.method == "POST" and request.POST.get("acao") == "salvar":
-        # Regra que você definiu:
-        # se o perfil tiver PERFIS_SUB_SALVAR, ele pode incluir N novas permissões
+        # se o perfil tiver PERFIS_SUB_SALVAR, ele pode incluir/alterar permissões
         if "PERFIS_SUB_SALVAR" not in permissoes_nomes:
             return redirect("permissoes")
 
@@ -335,22 +335,18 @@ def permissoes_view(request):
         if not permissoes_id:
             Permissao.objects.create(nome=nome, descricao=descricao)
         else:
-            # atualização de permissão já existente (opcionalmente controlada por outra permissão)
-            # se quiser controlar edição desta tela, crie PERMISSOES_SUB_EDITAR e use aqui
+            # atualização de permissão já existente
             permissao = get_object_or_404(Permissao, id=permissoes_id)
             permissao.nome = nome
             permissao.descricao = descricao
             permissao.save()
 
+        # Sempre redireciona SEM contexto de edição (form volta vazio)
         return redirect("permissoes")
 
     # ----- DELETE -----
     if request.method == "POST" and request.POST.get("acao") == "excluir":
-        # Se quiser controlar exclusão da tela de permissões, crie PERMISSOES_SUB_EXCLUIR
-        # e teste aqui. Por enquanto, vamos deixar sem travar:
-        # if "PERMISSOES_SUB_EXCLUIR" not in permissoes_nomes:
-        #     return redirect("permissoes")
-
+        # Se quiser controlar exclusão, coloque checagem de permissão aqui
         permissoes_id = request.POST.get("id")
         permissao = get_object_or_404(Permissao, id=permissoes_id)
         permissao.delete()
@@ -360,14 +356,15 @@ def permissoes_view(request):
     permissao_editar = None
     permissoes_id = request.GET.get("editar")
     if permissoes_id:
-        # se quiser controlar quem pode carregar para edição, crie PERMISSOES_SUB_EDITAR
-        # e teste aqui; por enquanto sempre permite:
+        # Se quiser, condicione aqui a uma permissão de edição
         permissao_editar = get_object_or_404(Permissao, id=permissoes_id)
 
+    # Lista para a tabela
     permissoes = Permissao.objects.all().order_by("nome")
+
     return render(
         request,
-        "c1SuiteApp/pages/permissoes.html",
+        "c1SuiteApp/pages/permissoes.html",  # mantém o caminho que funciona no seu projeto
         {
             "permissoes": permissoes,
             "permissoes_editar": permissao_editar,
@@ -375,13 +372,22 @@ def permissoes_view(request):
         },
     )
 
+from django.db import IntegrityError
+
 def usuarios_view(request):
     usuarios = Usuario.objects.all()
     perfis = Perfil.objects.all().order_by("nome")
 
+    # permissões do usuário logado (se estiver usando no template)
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
     editar_id = request.GET.get("editar")
 
-    # ---------- MODO EDIÇÃO / NOVO ----------
     if editar_id:
         usuario_editar = get_object_or_404(Usuario, pk=editar_id)
         username_inicial = usuario_editar.username
@@ -411,6 +417,7 @@ def usuarios_view(request):
                 messages.error(request, "ID de usuário inválido para exclusão.")
                 return redirect(reverse("usuarios"))
 
+            # aqui pode validar permissão: "USUARIO_SUB_EXCLUIR" in permissoes_nomes
             usuario_del.delete()
             messages.success(request, "Usuário excluído com sucesso.")
             return redirect(reverse("usuarios"))
@@ -427,8 +434,10 @@ def usuarios_view(request):
         elif not perfil_id:
             messages.error(request, "Selecione um perfil para o usuário.")
         else:
-            if usuario_editar:
-                usuario = usuario_editar
+            usuario_id_form = request.POST.get("usuario_id")
+
+            if usuario_id_form:
+                usuario = get_object_or_404(Usuario, pk=int(usuario_id_form))
             else:
                 usuario = Usuario()
 
@@ -436,11 +445,14 @@ def usuarios_view(request):
             usuario.email = email
             usuario.set_password(senha)
             usuario.ativo = ativo
-            usuario.perfil_id = perfil_id  # FK única
-            usuario.save()
+            usuario.perfil_id = perfil_id
 
-            messages.success(request, "Usuário salvo com sucesso.")
-            return redirect(reverse("usuarios"))
+            try:
+                usuario.save()
+                messages.success(request, "Usuário salvo com sucesso.")
+                return redirect(reverse("usuarios"))
+            except IntegrityError:
+                messages.error(request, "Já existe um usuário com esse login.")
 
     # ---------- RENDERIZAÇÃO ----------
     return render(
@@ -453,6 +465,7 @@ def usuarios_view(request):
             "username_inicial": username_inicial,
             "email_inicial": email_inicial,
             "perfil_associado": perfil_associado,
+            "permissoes_nomes": permissoes_nomes,
         },
     )
 
@@ -475,12 +488,21 @@ def perfis_permissoes_view(request):
     perfis = Perfil.objects.all().order_by('nome')
     permissoes = Permissao.objects.all().order_by('nome')
 
+    # permissões do perfil do usuário logado
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
     if not perfis:
         return render(request, 'c1SuiteApp/pages/perfis_permissoes.html', {
             'perfis': [],
             'permissoes': permissoes,
             'perfil_selecionado': None,
             'permissoes_do_perfil': [],
+            'permissoes_nomes': permissoes_nomes,
         })
 
     # --- SALVAR (POST) ---
@@ -498,17 +520,17 @@ def perfis_permissoes_view(request):
     perfil_id = request.GET.get('perfil') or perfis[0].id
     perfil_selecionado = get_object_or_404(Perfil, id=perfil_id)
 
-    # busca na tabela perfis_permissoes (ManyToMany) as permissões já vinculadas
+    # permissões já vinculadas ao perfil selecionado
     permissoes_do_perfil = set(
         perfil_selecionado.permissoes.values_list('id', flat=True)
     )
-    # agora permissoes_do_perfil é um conjunto de IDs inteiros do perfil
 
     context = {
         'perfis': perfis,
         'permissoes': permissoes,
         'perfil_selecionado': perfil_selecionado,
         'permissoes_do_perfil': permissoes_do_perfil,
+        'permissoes_nomes': permissoes_nomes,  # usado no template para habilitar o botão
     }
     return render(request, 'c1SuiteApp/pages/perfis_permissoes.html', context)
 	
@@ -622,9 +644,6 @@ arquivo	base.html:
                 {% else %}
                     <a href="#" class="menu-disabled">Usuários</a>
                 {% endif %}
-
-                <a href="#" class="menu-disabled">Grupos Usuários</a>
-                <a href="#" class="menu-disabled">Permissões Usuários</a>
             </div>
         </div>
 
@@ -731,7 +750,7 @@ arquivo perfis.html:
                 <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
             {% endif %}
 
-            <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
+            <button type="button" class="btn-small btn-wide btn-secondary" onclick="limparPermissao()">Limpar</button>
 
             <button type="button"
                     class="btn-small btn-wide btn-secondary voltar-btn"
@@ -797,6 +816,16 @@ arquivo perfis.html:
         {% endfor %}
     </ul>
 </div>
+<!-- javascript para limpar os campos na pagina html -->
+<script>
+    function limparPermissao() {
+        document.getElementById('nome').value = '';
+        document.getElementById('descricao').value = '';
+        // se quiser, zera também o hidden id para voltar ao modo inclusão
+        const idField = document.querySelector('input[name="id"]');
+        if (idField) idField.value = '';
+    }
+    </script>   
 {% endblock content %}
 
 ----------------------------------------------------//-----------------------------------------------
@@ -837,13 +866,14 @@ arquivo permissoes.html:
     
         <!-- botões abaixo, com espaçamento -->
         <div class="cad-form-buttons">
-            {% if "PERFIS_SUB_SALVAR" in permissoes_nomes %}
+            {% if "PERMIS_SUB_SALVAR" in permissoes_nomes %}
                 <button type="submit" class="btn-small btn-wide">Salvar</button>
             {% else %}
                 <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
             {% endif %}
     
-            <button type="reset" class="btn-small btn-wide btn-secondary">Limpar</button>
+            <button type="button" class="btn-small btn-wide btn-secondary" onclick="limparPermissao()">Limpar</button>
+
     
             <button type="button"
                     class="btn-small btn-wide btn-secondary voltar-btn"
@@ -882,14 +912,14 @@ arquivo permissoes.html:
                         <input type="hidden" name="id" value="{{ permissao.id }}">
                         <input type="hidden" name="acao" value="excluir">
                 
-                        {% if "PERFIS_SUB_EDITAR" in permissoes_nomes %}
+                        {% if "PERMIS_SUB_EDITAR" in permissoes_nomes %}
                             <a href="?editar={{ permissao.id }}" class="btn-small btn-wide">Editar</a>
                         {% else %}
                             <a href="#" class="btn-small btn-wide btn-disabled"
                                tabindex="-1" aria-disabled="true">Editar</a>
                         {% endif %}
                 
-                        {% if "PERFIS_SUB_EXCLUIR" in permissoes_nomes %}
+                        {% if "PERMIS_SUB_EXCLUIR" in permissoes_nomes %}
                             <button type="submit"
                                     class="btn-small btn-wide btn-danger"
                                     onclick="return confirm('Confirma a exclusão desta permissão?');">
@@ -910,6 +940,17 @@ arquivo permissoes.html:
         {% endfor %}
     </ul>
 </div>
+
+<!-- javascript para que o botão limpe os campos na página -->
+<script>
+    function limparPermissao() {
+        document.getElementById('nome').value = '';
+        document.getElementById('descricao').value = '';
+        // se quiser, zera também o hidden id para voltar ao modo inclusão
+        const idField = document.querySelector('input[name="id"]');
+        if (idField) idField.value = '';
+    }
+</script>    
 {% endblock content %}
 ----------------------------------------------------//-----------------------------------------------
 
@@ -953,7 +994,12 @@ arquivo perfis_permissoes.html:
                 {% endif %}
             {% endfor %}
         </ul>
-        <button type="submit" class="btn-small btn-wide">Salvar</button>
+        {% if "PER_PERM_SUB_INCLUIR" in permissoes_nomes %}
+            <button type="submit" class="btn-small btn-wide">Salvar</button>
+        {% else %}
+            <button type="submit" class="btn-small btn-wide btn-disabled">Salvar</button>
+        {% endif %}
+        
         <button type="button" class="btn-small btn-wide btn-secondary voltar-btn"
                 onclick="window.location.href='{% url 'home' %}'">
             Voltar
@@ -961,10 +1007,8 @@ arquivo perfis_permissoes.html:
     </form>
 </div>
 {% endblock content %}
-
 ----------------------------------------------------//-----------------------------------------------
 
-arquivo usuarios.html:
 {% extends "base.html" %}
 {% block title %}Helius - Usuários{% endblock title %}
 
@@ -976,6 +1020,9 @@ arquivo usuarios.html:
     <form method="POST" class="cad-form" action="{% url 'usuarios' %}">
         {% csrf_token %}
         <input type="hidden" name="acao" value="salvar">
+        {% if usuario_editar %}
+            <input type="hidden" name="usuario_id" value="{{ usuario_editar.id }}">
+        {% endif %}
 
         <!-- Linha com Usuário | Senha | E-mail | Ativo -->
         <div class="cad-form-row-usuarios">
@@ -1037,16 +1084,15 @@ arquivo usuarios.html:
         </ul>
 
         <div class="cad-form-buttons" style="margin-top: 1.5rem;">
-            <button type="submit" class="btn-small btn-wide">Salvar</button>
-            <button type="button" class="btn-small btn-wide btn-secondary"
-                    onclick="window.location.href='{% url "usuarios" %}'">
-                Limpar
-            </button>
-            <button type="button"
-                    class="btn-small btn-wide btn-secondary voltar-btn"
-                    onclick="window.location.href='{% url 'home' %}'">
-                Voltar
-            </button>
+            {% if "USUARIO_SUB_SALVAR" in permissoes_nomes %}
+                <button type="submit" class="btn-small btn-wide">Salvar</button>
+            {% else %}
+                <button type="submit" class="btn-small btn-wide btn-disabled">Salvar</button>
+            {% endif %}
+
+            <button type="button" class="btn-small btn-wide btn-secondary" onclick="window.location.href='{% url "usuarios" %}'">Limpar</button>
+
+            <button type="button" class="btn-small btn-wide btn-secondary voltar-btn" onclick="window.location.href='{% url 'home' %}'">Voltar</button>
         </div>
     </form>
 
@@ -1072,11 +1118,17 @@ arquivo usuarios.html:
                         {% csrf_token %}
                         <input type="hidden" name="acao" value="excluir">
                         <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
-                        <a href="?editar={{ usuario.id }}" class="btn-small btn-wide">Editar</a>
-                        <button type="submit" class="btn-small btn-wide btn-danger"
-                                onclick="return confirm('Confirma a exclusão deste usuário?');">
-                            Excluir
-                        </button>
+                        {% if "USUARIO_SUB_EDITAR" in permissoes_nomes %}
+                            <a href="?editar={{ usuario.id }}" class="btn-small btn-wide">Editar</a>
+                        {% else %}
+                            <a href="?editar={{ usuario.id }}" class="btn-small btn-wide btn-disabled">Editar</a>
+                        {% endif %}
+
+                        {% if "USUARIO_SUB_EXCLUIR" in permissoes_nomes %}
+                            <button type="submit" class="btn-small btn-wide btn-danger" onclick="return confirm('Confirma a exclusão deste usuário?');">Excluir</button>
+                        {% else %}
+                            <button type="submit" class="btn-small btn-wide btn-danger btn-disabled" onclick="return confirm('Confirma a exclusão deste usuário?');">Excluir</button>
+                        {% endif %}                        
                     </form>
                 </div>
             </li>

@@ -70,3 +70,16 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.username
+
+# Model parceirotipo
+class ParceiroTipo(models.Model):
+    id_tipopar = models.BigAutoField(primary_key=True)
+    descricao = models.CharField(max_length=30)
+
+    class Meta:
+        db_table = 'parceiros_tipo'
+        verbose_name = 'Tipo de Parceiro'
+        verbose_name_plural = 'Tipos de Parceiro'
+
+    def __str__(self):
+        return self.descricao
