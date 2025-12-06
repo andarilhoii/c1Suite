@@ -1,18 +1,16 @@
 {% extends "base.html" %}
-<!-- bloco que permite alterar o título desta pagina -->
 {% block title %} Helius - Permissões {% endblock title%}
 
-<!-- inicio do bloco que permite alterar o conteúdo dessa página-->
 {% block content %}
 <div class="cad-container cad-container-permissoes">
     <h1>Lista de Permissões</h1>
 
     <form method="POST" class="cad-form">
         {% csrf_token %}
-    
+
         <input type="hidden" name="id" value="{{ permissoes_editar.id|default_if_none:'' }}">
         <input type="hidden" name="acao" value="salvar">
-    
+
         <!-- Nome e Descrição lado a lado -->
         <div class="cad-form-row-dupla">
             <div class="cad-form-group">
@@ -23,14 +21,14 @@
                        value="{{ permissoes_editar.nome|default_if_none:'' }}"
                        required>
             </div>
-    
+
             <div class="cad-form-group cad-form-group-descricao">
                 <label for="descricao">Descrição:</label>
                 <textarea name="descricao"
                           id="descricao">{{ permissoes_editar.descricao|default_if_none:'' }}</textarea>
             </div>
         </div>
-    
+
         <!-- botões abaixo, com espaçamento -->
         <div class="cad-form-buttons">
             {% if "PERMIS_SUB_SALVAR" in permissoes_nomes %}
@@ -38,10 +36,10 @@
             {% else %}
                 <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
             {% endif %}
-    
-            <button type="button" class="btn-small btn-wide btn-secondary" onclick="limparPermissao()">Limpar</button>
 
-    
+            <button type="button" class="btn-small btn-wide btn-secondary"
+                    onclick="limparPermissao()">Limpar</button>
+
             <button type="button"
                     class="btn-small btn-wide btn-secondary voltar-btn"
                     onclick="window.location.href='{% url 'home' %}'">
@@ -49,43 +47,44 @@
             </button>
         </div>
     </form>
+
     <hr>
 
-    <!-- Listagem dos permissões -->
+    <!-- Listagem das permissões -->
     <ul class="cad-list cad-list-permissoes">
         <!-- cabeçalho das colunas -->
         <li class="cad-header">
-            <div>Nome</div>
-            <div>Descrição</div>
-            <!--<div class="col-acoes">Ações</div>-->
+            <div class="col-nome-permissoes">Nome</div>
+            <div class="col-descricao-permissoes">Descrição</div>
+            <div class="col-acoes-permissoes">Ações</div>
         </li>
 
         {% for permissao in permissoes %}
             <li class="cad-row">
-                <!-- coluna nome (sem negrito específico) -->
-                <div class="col-nome col-nome-permissoes">
+                <!-- coluna nome -->
+                <div class="col-nome-permissoes">
                     {{ permissao.nome }}
                 </div>
 
                 <!-- coluna descrição -->
-                <div class="col-descricao">
+                <div class="col-descricao-permissoes">
                     {{ permissao.descricao|linebreaksbr }}
                 </div>
 
                 <!-- coluna ações -->
-                <div class="col-acoes">
+                <div class="col-acoes-permissoes">
                     <form method="post" style="display:inline-flex; gap: 0.6rem; align-items: center;">
                         {% csrf_token %}
                         <input type="hidden" name="id" value="{{ permissao.id }}">
                         <input type="hidden" name="acao" value="excluir">
-                
+
                         {% if "PERMIS_SUB_EDITAR" in permissoes_nomes %}
                             <a href="?editar={{ permissao.id }}" class="btn-small btn-wide">Editar</a>
                         {% else %}
                             <a href="#" class="btn-small btn-wide btn-disabled"
                                tabindex="-1" aria-disabled="true">Editar</a>
                         {% endif %}
-                
+
                         {% if "PERMIS_SUB_EXCLUIR" in permissoes_nomes %}
                             <button type="submit"
                                     class="btn-small btn-wide btn-danger"
@@ -108,15 +107,12 @@
     </ul>
 </div>
 
-<!-- javascript para que o botão lime os campos do formulário -->
 <script>
-    function limparPermissao() {
-        document.getElementById('nome').value = '';
-        document.getElementById('descricao').value = '';
-        // se quiser, zera também o hidden id para voltar ao modo inclusão
-        const idField = document.querySelector('input[name="id"]');
-        if (idField) idField.value = '';
-    }
-</script>    
-
+function limparPermissao() {
+    document.getElementById('nome').value = '';
+    document.getElementById('descricao').value = '';
+    const idField = document.querySelector('input[name="id"]');
+    if (idField) idField.value = '';
+}
+</script>
 {% endblock content %}

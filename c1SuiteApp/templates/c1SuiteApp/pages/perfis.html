@@ -35,15 +35,14 @@
 
         <!-- botões principais do formulário -->
         <div class="cad-form-buttons">
-            <!-- SALVAR -->
             {% if "PERFIS_SUB_SALVAR" in permissoes_nomes %}
                 <button type="submit" class="btn-small btn-wide">Salvar</button>
             {% else %}
-                <!-- não envia POST -->
                 <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
             {% endif %}
 
-            <button type="button" class="btn-small btn-wide btn-secondary" onclick="limparPermissao()">Limpar</button>
+            <button type="button" class="btn-small btn-wide btn-secondary"
+                    onclick="limparPermissao()">Limpar</button>
 
             <button type="button"
                     class="btn-small btn-wide btn-secondary voltar-btn"
@@ -52,41 +51,39 @@
             </button>
         </div>
     </form>
+
     <hr>
 
     <!-- Listagem dos perfis -->
-    <ul class="cad-list">
+    <ul class="cad-list cad-list-perfis">
         <li class="cad-header">
-            <div>Nome</div>
-            <div>Descrição</div>
+            <div class="col-nome-perfis">Nome</div>
+            <div class="col-descricao-perfis">Descrição</div>
         </li>
 
         {% for perfil in perfis %}
             <li class="cad-row">
-                <div class="col-nome">
+                <div class="col-nome-perfis">
                     <strong>{{ perfil.nome }}</strong>
                 </div>
 
-                <div class="col-descricao">
+                <div class="col-descricao-perfis">
                     {{ perfil.descricao|linebreaksbr }}
                 </div>
 
-                <div class="col-acoes">
+                <div class="col-acoes-perfis">
                     <form method="post" style="display:inline-flex; gap: 0.6rem; align-items: center;">
                         {% csrf_token %}
                         <input type="hidden" name="id" value="{{ perfil.id }}">
                         <input type="hidden" name="acao" value="excluir">
 
-                        <!-- EDITAR -->
                         {% if "PERFIS_SUB_EDITAR" in permissoes_nomes %}
                             <a href="?editar={{ perfil.id }}" class="btn-small btn-wide">Editar</a>
                         {% else %}
-                            <!-- sem ?editar, não carrega modo edição -->
                             <a href="#" class="btn-small btn-wide btn-disabled"
                                tabindex="-1" aria-disabled="true">Editar</a>
                         {% endif %}
 
-                        <!-- EXCLUIR -->
                         {% if "PERFIS_SUB_EXCLUIR" in permissoes_nomes %}
                             <button type="submit"
                                     class="btn-small btn-wide btn-danger"
@@ -94,7 +91,6 @@
                                 Excluir
                             </button>
                         {% else %}
-                            <!-- type="button" para não enviar POST -->
                             <button type="button"
                                     class="btn-small btn-wide btn-danger btn-disabled"
                                     tabindex="-1" aria-disabled="true">
@@ -109,16 +105,14 @@
         {% endfor %}
     </ul>
 </div>
+
 <!-- javascript para limpar os campos na pagina html -->
 <script>
-    function limparPermissao() {
-        document.getElementById('nome').value = '';
-        document.getElementById('descricao').value = '';
-        // se quiser, zera também o hidden id para voltar ao modo inclusão
-        const idField = document.querySelector('input[name="id"]');
-        if (idField) idField.value = '';
-    }
-    </script>   
+function limparPermissao() {
+    document.getElementById('nome').value = '';
+    document.getElementById('descricao').value = '';
+    const idField = document.querySelector('input[name="id"]');
+    if (idField) idField.value = '';
+}
+</script>
 {% endblock content %}
-
-

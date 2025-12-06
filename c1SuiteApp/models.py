@@ -83,3 +83,24 @@ class ParceiroTipo(models.Model):
 
     def __str__(self):
         return self.descricao
+
+# Model uf
+
+class Uf(models.Model):
+    uf = models.CharField(primary_key=True, max_length=2)
+    nome = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = 'c1SuiteApp_uf'
+
+
+# Model cidades
+class Cidade(models.Model):
+    id_cidade = models.BigAutoField(primary_key=True)
+    nome = models.CharField(max_length=50)
+    uf = models.ForeignKey('Uf', on_delete=models.PROTECT, db_column='uf')
+    id_ibge = models.CharField(max_length=10)
+
+    class Meta:
+        db_table = 'c1SuiteApp_cidades'
+

@@ -1,10 +1,11 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
-from .models import Perfil, Permissao, Usuario, ParceiroTipo
-from .forms import LoginForm, UsuarioForm
+from .models import Perfil, Permissao, Usuario, ParceiroTipo, Cidade, Uf
+from .forms import LoginForm, UsuarioForm, CidadeForm
 from django.urls import reverse       
 from django.contrib import messages   
 from django.db import IntegrityError
+from django.core.paginator import Paginator
 
 # Create your views here.
 def login_view(request):
@@ -351,6 +352,104 @@ def parceiros_tipo_view(request):
         {
             "tipos": tipos,
             "tipo_editar": tipo_editar,
+            "permissoes_nomes": permissoes_nomes,
+        },
+    )
+
+def uf_view(request):
+    ufs = Uf.objects.all().order_by('uf')
+    context = {'ufs': ufs}
+    return render(request, 'uf.html', context)
+
+def cidades_view(request):
+    # ----- PERMISSÕES DO PERFIL DO USUÁRIO LOGADO -----
+    user = request.user
+    permissoes_nomes = set()
+    if hasattr(user, "perfil") and user.perfil is not None:
+        permissoes_nomes = set(
+            user.perfil.permissoes.values_list("nome", flat=True)
+        )
+
+    # ---------- CREATE / UPDATE ----------
+    if request.method == "POST" and request.POST.get("acao") == "salvar":
+        if "CIDADES_SUB_SALVAR" not in permissoes_nomes:
+            return redirect("cidades")
+
+        cidade_id = request.POST.get("id")
+        nome = request.POST.get("nome")
+        uf_sigla = request.POST.get("uf")
+        id_ibge = request.POST.get("id_ibge", "")
+
+        uf = get_object_or_404(Uf, uf=uf_sigla)
+
+        if cidade_id:  # atualização
+            if "CIDADES_SUB_EDITAR" not in permissoes_nomes:
+                return redirect("cidades")
+            cidade = get_object_or_404(Cidade, id_cidade=cidade_id)
+            cidade.nome = nome
+            cidade.uf = uf
+            cidade.id_ibge = id_ibge
+            cidade.save()
+        else:  # inclusão
+            Cidade.objects.create(
+                nome=nome,
+                uf=uf,
+                id_ibge=id_ibge,
+            )
+
+        return redirect("cidades")
+
+    # ---------- DELETE ----------
+    if request.method == "POST" and request.POST.get("acao") == "excluir":
+        if "CIDADES_SUB_EXCLUIR" not in permissoes_nomes:
+            return redirect("cidades")
+
+        cidade_id = request.POST.get("id")
+        cidade = get_object_or_404(Cidade, id_cidade=cidade_id)
+        cidade.delete()
+        return redirect("cidades")
+
+    # ---------- EDIT (carregar dados no form) ----------
+    cidade_editar = None
+    cidade_id = request.GET.get("editar")
+    if cidade_id and "CIDADES_SUB_EDITAR" in permissoes_nomes:
+        cidade_editar = get_object_or_404(Cidade, id_cidade=cidade_id)
+
+    # ---------- LISTAGEM + FILTRO ----------
+    cidades_qs = Cidade.objects.select_related("uf").order_by("nome")
+
+    acao = request.GET.get("acao")
+    nome_f = (request.GET.get("nome") or "").strip()
+    uf_f = (request.GET.get("uf") or "").strip()
+    ibge_f = (request.GET.get("id_ibge") or "").strip()
+
+    if acao == "pesquisar":
+        campos_preenchidos = sum(bool(v) for v in [nome_f, uf_f, ibge_f])
+
+        if campos_preenchidos == 1:
+            if nome_f:
+                cidades_qs = cidades_qs.filter(nome__icontains=nome_f)
+            elif uf_f:
+                cidades_qs = cidades_qs.filter(uf__uf=uf_f)
+            elif ibge_f:
+                cidades_qs = cidades_qs.filter(id_ibge__icontains=ibge_f)
+        # se 0 ou >1 campos, não aplica filtro (poderia setar msg no contexto)
+
+    # ---------- PAGINAÇÃO ----------
+    paginator = Paginator(cidades_qs, 25)  # 25 registros por página
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    ufs = Uf.objects.all().order_by("uf")
+
+    return render(
+        request,
+        "c1SuiteApp/pages/cidades.html",
+        {
+            "cidades": page_obj,
+            "page_obj": page_obj,
+            "cidade_editar": cidade_editar,
+            "ufs": ufs,
             "permissoes_nomes": permissoes_nomes,
         },
     )

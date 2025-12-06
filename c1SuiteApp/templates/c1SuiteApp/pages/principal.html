@@ -52,6 +52,12 @@
                     {% else %}
                         <a href="#" class="menu-disabled">Tipos de Parceiros</a>
                     {% endif %}
+                    <!-- SUBMENU CIDADES-->
+                    {% if "ACESSO_CIDADES" in permissoes_nomes %}
+                        <a href="{% url 'cidades' %}">Cidades</a>
+                    {% else %}
+                         <a href="#" class="menu-disabled">Cidades</a>
+                    {% endif %}
                 </div>
             </div>
         {% else %}

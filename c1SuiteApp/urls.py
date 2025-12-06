@@ -10,6 +10,8 @@ from .views import (
     principal_view,
     perfis_permissoes_view,
     parceiros_tipo_view,
+    uf_view,
+    cidades_view
 )
 
 urlpatterns = [
@@ -20,6 +22,8 @@ urlpatterns = [
     path("permissoes/", login_required(permissoes_view), name="permissoes"),
     path("usuarios/", login_required(usuarios_view), name="usuarios"),
     path("perfis-permissoes/",login_required(perfis_permissoes_view), name="perfis_permissoes",),
-    path("tipos-parceiros/",parceiros_tipo_view, name='tipos_parceiros'),
+    path("tipos-parceiros/",login_required(parceiros_tipo_view), name='tipos_parceiros'),
+    path("uf/",login_required(uf_view), name='uf'),
+    path("cidades/",login_required(cidades_view), name='cidades'),
 ]
 

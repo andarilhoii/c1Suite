@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %} Helius - Cidades {% endblock title%}
+
+{% block content %}
+<div class="cad-container">
+
+    <h1>Lista de Cidades</h1>
+
+    <!-- Formulário ÚNICO: CADASTRO (POST) + PESQUISA (GET via JS) -->
+    <form id="form-cidade" method="POST" class="cad-form">
+        {% csrf_token %}
+        <!-- id oculto para edição -->
+        <input type="hidden" name="id" value="{{ cidade_editar.id_cidade|default_if_none:'' }}">
+        <!-- ação padrão de salvar (POST) -->
+        <input type="hidden" name="acao" id="acao_form" value="salvar">
+
+      <!-- Nome, UF e IBGE lado a lado (40 / 30 / 20) -->
+        <div class="cad-form-row-trio" style="display:grid; grid-template-columns: 45% 25% 20%; column-gap:1rem;">
+            <div class="cad-form-group cad-form-group-nome">
+                <label for="nome">Nome:</label>
+                <input type="text" name="nome" id="nome" style="height:3.2rem;" value="{% if request.GET.nome %}{{ request.GET.nome }}{% elif cidade_editar %}{{ cidade_editar.nome }}{% else %}{% endif %}">
+            </div>
+
+            <div class="cad-form-group cad-form-group-uf">
+                <label for="uf">UF:</label>
+                <select name="uf"
+                        id="uf"
+                        style="height:3.2rem; line-height:3.2rem; padding-top:0; padding-bottom:0; margin-top:0.3rem;">
+                    <option value="">Selecione...</option>
+                    {% for u in ufs %}
+                        <option value="{{ u.uf }}"
+                            {% if request.GET.uf == u.uf %}
+                                selected
+                            {% elif cidade_editar and cidade_editar.uf.uf == u.uf %}
+                                selected
+                            {% endif %}>
+                            {{ u.uf }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="cad-form-group cad-form-group-ibge">
+                <label for="id_ibge">IBGE:</label>
+                <input type="text" name="id_ibge" id="id_ibge" style="height:3.2rem;" value="{% if request.GET.id_ibge %}{{ request.GET.id_ibge }}{% elif cidade_editar %}{{ cidade_editar.id_ibge }}{% else %}{% endif %}">
+            </div>
+        </div>
+
+        <!-- botões principais do formulário (CRUD + PESQUISA) -->
+        <div class="cad-form-buttons"
+             style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+
+            <div>
+                {% if "CIDADES_SUB_SALVAR" in permissoes_nomes %}
+                    <button type="submit" class="btn-small btn-wide">Salvar</button>
+                {% else %}
+                    <button type="button" class="btn-small btn-wide btn-disabled">Salvar</button>
+                {% endif %}
+
+                <button type="button"
+                        class="btn-small btn-wide"
+                        onclick="submeterPesquisa()">Pesquisar</button>
+
+                <button type="button" class="btn-small btn-wide btn-secondary"
+                        onclick="limparTudo()">Limpar</button>
+
+                <button type="button"
+                        class="btn-small btn-wide btn-secondary voltar-btn"
+                        onclick="window.location.href='{% url 'home' %}'">
+                    Voltar
+                </button>
+            </div>
+
+            <!-- label de quantidade na mesma linha -->
+            <div style="font-weight:bold; white-space:nowrap;">
+                {% if page_obj.paginator.count %}
+                    {{ page_obj.paginator.count }} registro{% if page_obj.paginator.count != 1 %}s{% endif %} encontrado{% if page_obj.paginator.count != 1 %}s{% endif %}
+                {% else %}
+                    0 registros encontrados
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    <hr>
+
+    <!-- Listagem das cidades -->
+    <ul class="cad-list cad-list-cidades">
+        <li class="cad-header cad-row">
+            <div class="col-nome"><strong>Nome</strong></div>
+            <div class="col-uf">UF</div>
+            <div class="col-ibge">IBGE</div>
+            <div class="col-acoes">Ações</div>
+        </li>
+
+        {% for cidade in cidades %}
+            <li class="cad-row">
+                <div class="col-nome">
+                    <strong>{{ cidade.nome }}</strong>
+                </div>
+
+                <div class="col-uf">
+                    {{ cidade.uf.uf }}
+                </div>
+
+                <div class="col-ibge">
+                    {{ cidade.id_ibge }}
+                </div>
+
+                <div class="col-acoes">
+                    <!-- botões lado a lado -->
+                    <form method="post" class="cad-acoes-form"
+                          style="display:inline-flex; gap:0.4rem; align-items:center; margin:0;">
+                        {% csrf_token %}
+                        <input type="hidden" name="id" value="{{ cidade.id_cidade }}">
+                        <input type="hidden" name="acao" value="excluir">
+
+                        {% if "CIDADES_SUB_EDITAR" in permissoes_nomes %}
+                            <a href="?editar={{ cidade.id_cidade }}" class="btn-small btn-wide">Editar</a>
+                        {% else %}
+                            <a href="#" class="btn-small btn-wide btn-disabled"
+                               tabindex="-1" aria-disabled="true">Editar</a>
+                        {% endif %}
+
+                        {% if "CIDADES_SUB_EXCLUIR" in permissoes_nomes %}
+                            <button type="submit"
+                                    class="btn-small btn-wide btn-danger"
+                                    onclick="return confirm('Confirma a exclusão desta cidade?');">
+                                Excluir
+                            </button>
+                        {% else %}
+                            <button type="button"
+                                    class="btn-small btn-wide btn-danger btn-disabled"
+                                    tabindex="-1" aria-disabled="true">
+                                Excluir
+                            </button>
+                        {% endif %}
+                    </form>
+                </div>
+            </li>
+        {% empty %}
+            <li>Nenhuma cidade cadastrada.</li>
+        {% endfor %}
+    </ul>
+
+    <!-- Paginação (mantém filtros na URL) -->
+    {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            <span class="step-links">
+                {% if page_obj.has_previous %}
+                    <a href="?acao=pesquisar&nome={{ request.GET.nome }}&uf={{ request.GET.uf }}&id_ibge={{ request.GET.id_ibge }}&page=1">&laquo; Primeiro</a>
+                    <a href="?acao=pesquisar&nome={{ request.GET.nome }}&uf={{ request.GET.uf }}&id_ibge={{ request.GET.id_ibge }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+                {% endif %}
+                <span class="current">
+                    Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                </span>
+                {% if page_obj.has_next %}
+                    <a href="?acao=pesquisar&nome={{ request.GET.nome }}&uf={{ request.GET.uf }}&id_ibge={{ request.GET.id_ibge }}&page={{ page_obj.next_page_number }}">Próxima</a>
+                    <a href="?acao=pesquisar&nome={{ request.GET.nome }}&uf={{ request.GET.uf }}&id_ibge={{ request.GET.id_ibge }}&page={{ page_obj.paginator.num_pages }}">Última &raquo;</a>
+                {% endif %}
+            </span>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function limparTudo() {
+    const nome = document.getElementById('nome');
+    const ibge = document.getElementById('id_ibge');
+    const ufSelect = document.getElementById('uf');
+    const idField = document.querySelector('input[name="id"]');
+
+    if (nome) nome.value = '';
+    if (ibge) ibge.value = '';
+    if (ufSelect) ufSelect.selectedIndex = 0;
+    if (idField) idField.value = '';
+
+    // remove filtros da URL e volta para a página 1
+    window.location.href = window.location.pathname;
+}
+
+function submeterPesquisa() {
+    const nome = document.getElementById('nome').value.trim();
+    const uf = document.getElementById('uf').value.trim();
+    const ibge = document.getElementById('id_ibge').value.trim();
+    const camposPreenchidos = [nome, uf, ibge].filter(v => v !== '');
+
+    if (camposPreenchidos.length === 0) {
+        alert('Preencha pelo menos um campo para pesquisar.');
+        return;
+    }
+    if (camposPreenchidos.length > 1) {
+        alert('Preencha apenas um campo para pesquisar (Nome OU UF OU IBGE).');
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.set('acao', 'pesquisar');
+    if (nome) params.set('nome', nome);
+    if (uf) params.set('uf', uf);
+    if (ibge) params.set('id_ibge', ibge);
+
+    window.location.href = window.location.pathname + '?' + params.toString();
+}
+</script>
+{% endblock content %}
+
